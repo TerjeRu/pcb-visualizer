@@ -13,3 +13,11 @@ paths = [
   '''^service/tests/test_(?:redact|datarepo|export)\.py$''',
   '''^app/vendor/xterm/xterm\.js$''',
 ]
+
+[[allowlists]]
+# The fingerprint of the package signing key is public: the README prints it for pacman-key. The
+# generic-api-key rule reads it as a key wherever a script names it. Only this exact value is allowed.
+description = "public fingerprint of the package signing key"
+regexes = [
+  '''^7ADF401F8B49E82ADB4B3DD0F8348B1E8C5C595B$''',
+]

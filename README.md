@@ -187,8 +187,8 @@ The release page gives the SHA-256 of the file. This way gets no automatic updat
 
 ### From source
 
-From a source checkout, every `pcbv` command runs as `uv run pcbv` inside the `service/` folder; `pcbv` is
-not put on your PATH. The Arch package below installs `pcbv` as a normal command.
+From a source checkout, `pcbv` is not on your PATH. Run each `pcbv` command as `uv run pcbv` in the
+`service/` folder. An installed package puts `pcbv` on your PATH.
 
 #### The app in a browser
 
@@ -229,12 +229,20 @@ AppImage builds are not supported.
 
 ### First start
 
+If you installed the package, start **PCB Visualizer** from the Plasma menu, or run `pcbv-desktop`.
+The desktop app starts the service when none is running and stops it when you quit. To add a
+ready-made demo board, run `pcbv demo` before you start the app.
+
+From a source checkout, run these commands to use the app in a browser:
+
 ```sh
 cd service
 uv run pcbv demo                      # a ready-made demo board to explore
 uv run pcbv serve                     # the service, on 127.0.0.1:8765
 uv run pcbv open                      # in another terminal: the app in your browser
 ```
+
+For the desktop app from source, run `npm run desktop` from the repository root instead.
 
 On the first start with no boards, the app shows a Welcome page. The Welcome page offers three things:
 
@@ -251,13 +259,16 @@ The tutorial has 18 steps in five chapters. The multimeter and the adapter wirin
 Console, the Logic panel and the export are the real panels, working on the virtual board and a
 practice capture.
 
-`uv run pcbv new "My Router"` creates a board of your own. Git is off until you turn it on in Settings
-(top bar), which guides you through it. `uv run pcbv repo init` does the repository step from the
+The commands from here on use the installed `pcbv`. From a source checkout, run them as `uv run pcbv`
+in `service/`.
+
+`pcbv new "My Router"` creates a board of your own. Git is off until you turn it on in Settings
+(top bar), which guides you through it. `pcbv repo init` does the repository step from the
 command line, in `~/hw` by default. You need the repository for `pcbv sync`.
 
 If you have no hardware, press **Start the virtual board** in the Console panel. It runs a virtual board
-on a pseudo-terminal and lists it like a USB adapter. In a terminal, `uv run pcbv vdev` does the same.
-`uv run pcbv fake-capture -o boot.sr` writes a logic capture of the board booting.
+on a pseudo-terminal and lists it like a USB adapter. In a terminal, `pcbv vdev` does the same.
+`pcbv fake-capture -o boot.sr` writes a logic capture of the board booting.
 
 ## Tools you may need
 
@@ -285,7 +296,8 @@ on a pseudo-terminal and lists it like a USB adapter. In a terminal, `uv run pcb
 | `pcbv kwin-rules` | KWin rules that pin the desktop windows to monitors |
 | `pcbv vdev`, `pcbv fake-capture`, `pcbv fake-model` | a virtual board, a practice capture, a simulated model server |
 
-Run them as `uv run pcbv ...` in `service/`. `pcbv <command> --help` lists the options.
+From a source checkout, run them as `uv run pcbv ...` in `service/`. `pcbv <command> --help` lists the
+options.
 
 ## Board folders
 
