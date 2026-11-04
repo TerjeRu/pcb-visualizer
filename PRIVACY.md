@@ -23,6 +23,11 @@ of its profile.
 
 Links to other sites open in your system browser.
 
+## Downloads
+
+Updates come from the package manager, not from the app. The package repository at
+`pcb.lethio.com/arch` keeps no access log. Downloads from GitHub follow GitHub's terms.
+
 ## Redaction
 
 The app does not change what you record. A board folder keeps passwords, keys and serial numbers as they

@@ -142,16 +142,48 @@ The app's Welcome and Settings check the software and show the command for anyth
 
 ## Install (Arch Linux)
 
+### From the signed package repository
+
+This is the quickest way, and new versions then arrive with your normal system updates. The package has
+everything the app needs, including its own Python.
+
+1. Get the signing key and tell pacman to trust it:
+
+   ```sh
+   curl -sO https://pcb.lethio.com/arch/lethio.asc
+   sudo pacman-key --add lethio.asc
+   sudo pacman-key --lsign-key 7ADF401F8B49E82ADB4B3DD0F8348B1E8C5C595B
+   ```
+
+   The last line is the key's fingerprint. It belongs to Terje Rutgersen (package signing)
+   `<support@lethio.com>`.
+
+2. Add the repository to the end of `/etc/pacman.conf`:
+
+   ```ini
+   [lethio]
+   Server = https://pcb.lethio.com/arch/$arch
+   ```
+
+3. Install:
+
+   ```sh
+   sudo pacman -Syu pcbv
+   ```
+
+Start **PCB Visualizer** from the Plasma menu, or run `pcbv-desktop`. Updates come with `sudo pacman -Syu`.
+pacman checks the signature of the package list and of each package, and refuses a file that was changed.
+Remove the app with `sudo pacman -R pcbv`; your boards and settings stay.
+
 ### Download the package
 
-This is the quickest way. The package has everything the app needs, including its own Python:
+To install one version without adding the repository, install the file from the GitHub release:
 
 ```sh
 sudo pacman -U https://github.com/TerjeRu/pcb-visualizer/releases/download/v0.1.0/pcbv-0.1.0-1-x86_64.pkg.tar.zst
 ```
 
-Start **PCB Visualizer** from the Plasma menu, or run `pcbv-desktop`. The release page gives the SHA-256
-of the file. Remove the app with `sudo pacman -R pcbv`; your boards and settings stay.
+The release page gives the SHA-256 of the file. This way gets no automatic updates.
 
 ### From source
 
