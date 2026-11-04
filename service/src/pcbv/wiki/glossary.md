@@ -1,0 +1,52 @@
+# Glossary
+
+- **Active low**: a signal that takes effect at 0 V, written with a bar, `#` or an `n` prefix. See [Reading datasheets](datasheets).
+- **Ampere (A)**: the unit of current. Board signals use milliamperes (mA). See [Electricity basics](electricity-basics).
+- **Baud**: the unit of the speed of a serial line, in bits per second. 115200 baud is the usual speed of a router console. See [UART](uart).
+- **BGA**: a chip package with balls underneath instead of legs. Do not probe it directly. See [Chip packages and markings](chip-packages).
+- **Boot ROM**: the code inside the SoC that runs first. It loads the bootloader. See [The boot chain](boot-chain).
+- **Bootloader**: the program that loads the kernel. It is usually U-Boot or CFE.
+- **Chip select (CS#)**: the SPI line that addresses one peripheral. See [SPI](spi).
+- **Continuity**: a connection between two points. The meter beeps when there is continuity. See [Multimeter basics](multimeter).
+- **Datasheet**: the manufacturer's specification for a part. See [Reading datasheets](datasheets).
+- **Decoupling capacitor**: a small capacitor next to the supply pin of a chip. It smooths the supply.
+- **Designator**: the label of a component, such as R12 or U1. It is printed on the silkscreen and used in schematics. See [Reading schematics](reading-schematics).
+- **Device tree**: a description of the hardware of the board. The bootloader passes it to the Linux kernel.
+- **DNP**: do not populate. The board has a footprint for the part, but the part is not fitted.
+- **Dupont wire**: a jumper wire with 2.54 mm connectors. See [Wiring](wiring).
+- **Entropy**: how random data looks. It is high for compressed or encrypted regions. See [Firmware images](firmware-basics).
+- **ESD**: electrostatic discharge. See [Static electricity](static).
+- **Flash**: the chip that holds the firmware. See [SPI flash](spi-flash).
+- **Flux**: a chemical that cleans metal surfaces, so that solder flows. See [Soldering](soldering).
+- **GND**: ground, the 0 V reference. See [Ground](ground).
+- **Header**: a row or grid of pins or holes where you connect wires. See [Headers](headers).
+- **I2C**: a two-wire bus for small chips such as EEPROMs. See [I2C](i2c).
+- **JTAG**: a debug interface, often on a 2 x 5, 2 x 7 or 2 x 10 header. It gives more control than UART and has more risk. See [JTAG and SWD](jtag).
+- **Logic level**: the voltage of a digital 1. It is often 3.3 V. See [Logic levels](logic-levels).
+- **MTD**: Memory Technology Device. This is the Linux layer for raw flash and its partitions. See [Flash and filesystems](flash-and-filesystems).
+- **NAND**: flash with a high capacity. It has bad blocks and needs error correction. See [Flash and filesystems](flash-and-filesystems).
+- **Net**: a set of pins connected to each other. See [Reading schematics](reading-schematics).
+- **NOR**: small, reliable flash that you read byte by byte. It is the usual SPI flash.
+- **Ohm (Ω)**: the unit of resistance.
+- **OL**: open loop. The meter shows OL when the resistance is too high to measure.
+- **Open drain**: an output that can only pull a line low. A pull-up brings the line high. See [I2C](i2c).
+- **OpenOCD**: open-source software for JTAG and SWD debug adapters. See [JTAG and SWD](jtag).
+- **Pitch**: the distance between two pins. It is often 2.54 mm.
+- **Pull-up**: a resistor that holds a signal at the supply voltage when nothing drives the signal. See [Reading schematics](reading-schematics).
+- **Rail**: a supply voltage that runs across the board, such as 3.3 V. See [Electricity basics](electricity-basics).
+- **Regulator**: a part that makes one supply voltage from a higher voltage.
+- **RX / TX**: receive and transmit. Cross them when you wire an adapter. See [UART](uart).
+- **Schematic**: a diagram that shows which pins connect to each other. See [Reading schematics](reading-schematics).
+- **Silkscreen**: the printed text and outlines on the board, such as J4 or R12.
+- **SoC**: system on chip, the main processor. See [SoC](soc).
+- **SOIC-8**: a small chip package with 8 legs. It is common for SPI flash.
+- **Solder wick**: braided copper that soaks up molten solder. See [Soldering](soldering).
+- **SPI**: a fast four-wire bus between the SoC and its flash. See [SPI](spi).
+- **SquashFS**: a compressed, read-only filesystem for router system images.
+- **SWD**: the two-wire debug interface from ARM. See [JTAG and SWD](jtag).
+- **Test point**: a pad marked TP, for the factory tester. See [Parts on a router board](board-parts).
+- **UART**: the serial console. See [UART](uart).
+- **U-Boot**: the most common open-source bootloader on embedded boards.
+- **uImage**: the legacy U-Boot image format. It starts with the bytes 27 05 19 56. See [Firmware images](firmware-basics).
+- **VCC**: the supply voltage pin. Never connect the VCC of an adapter to the board.
+- **Volt (V)**: the unit of voltage. See [Electricity basics](electricity-basics).

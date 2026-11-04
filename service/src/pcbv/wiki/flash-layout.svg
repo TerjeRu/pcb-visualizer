@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 245" width="760" height="245" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="13" fill="#1b1f24">
+  <rect width="760" height="245" fill="#ffffff"/>
+  <rect x="10" y="50" width="90" height="60" fill="#d9dde2" stroke="#1b1f24" stroke-width="2"/>
+  <text x="55.0" y="85" text-anchor="middle" font-weight="600" font-size="12">u-boot</text>
+  <text x="12" y="128" font-family="JetBrains Mono, monospace" font-size="10" fill="#5b6470">0x000000</text>
+  <rect x="100" y="50" width="60" height="60" fill="#ffffff" stroke="#1b1f24" stroke-width="2"/>
+  <text x="130.0" y="85" text-anchor="middle" font-weight="600" font-size="12">env</text>
+  <text x="102" y="128" font-family="JetBrains Mono, monospace" font-size="10" fill="#5b6470">0x040000</text>
+  <rect x="160" y="50" width="80" height="60" fill="#f6dcc2" stroke="#b45309" stroke-width="2"/>
+  <text x="200.0" y="85" text-anchor="middle" font-weight="600" font-size="12">factory</text>
+  <text x="162" y="128" font-family="JetBrains Mono, monospace" font-size="10" fill="#5b6470">0x050000</text>
+  <rect x="240" y="50" width="130" height="60" fill="#eef0f3" stroke="#1b1f24" stroke-width="2"/>
+  <text x="305.0" y="85" text-anchor="middle" font-weight="600" font-size="12">kernel</text>
+  <text x="242" y="128" font-family="JetBrains Mono, monospace" font-size="10" fill="#5b6470">0x060000</text>
+  <rect x="370" y="50" width="270" height="60" fill="#eef0f3" stroke="#1b1f24" stroke-width="2"/>
+  <text x="505.0" y="85" text-anchor="middle" font-weight="600" font-size="12">rootfs (SquashFS)</text>
+  <text x="372" y="128" font-family="JetBrains Mono, monospace" font-size="10" fill="#5b6470">0x260000</text>
+  <rect x="640" y="50" width="110" height="60" fill="#ffffff" stroke="#1b1f24" stroke-width="2"/>
+  <text x="695.0" y="85" text-anchor="middle" font-weight="600" font-size="12">rootfs_data</text>
+  <text x="642" y="128" font-family="JetBrains Mono, monospace" font-size="10" fill="#5b6470">0xF80000</text>
+  <text x="10" y="30" font-weight="600">16 MB SPI NOR flash, start to end (not to scale)</text>
+  <rect x="10" y="149" width="14" height="14" fill="#d9dde2" stroke="#1b1f24" stroke-width="2"/>
+  <text x="32" y="160" font-size="12">bootloader: losing it needs a programmer to recover</text>
+  <rect x="10" y="171" width="14" height="14" fill="#f6dcc2" stroke="#b45309" stroke-width="2"/>
+  <text x="32" y="182" font-size="12">unique to this unit: back it up first</text>
+  <rect x="10" y="193" width="14" height="14" fill="#eef0f3" stroke="#1b1f24" stroke-width="2"/>
+  <text x="32" y="204" font-size="12">system image: replaced by firmware updates</text>
+  <rect x="10" y="215" width="14" height="14" fill="#ffffff" stroke="#1b1f24" stroke-width="2"/>
+  <text x="32" y="226" font-size="12">writable: settings and changes</text>
+</svg>

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PCB Visualizer
+Comment=Document the debug interfaces of hardware you own
+Exec=pcbv-desktop
+Icon=pcbv
+Terminal=false
+Categories=Development;Electronics;
+StartupWMClass=pcbv-desktop

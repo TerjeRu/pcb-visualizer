@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 250" width="760" height="250" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="13" fill="#1b1f24">
+  <rect width="760" height="250" fill="#ffffff"/>
+  <defs>
+    <g id="board">
+      <rect x="-70" y="130" width="140" height="26" fill="#cfd8c4" stroke="#7d8a70"/>
+      <rect x="-24" y="126" width="20" height="4" fill="#b45309"/>
+      <rect x="4" y="126" width="20" height="4" fill="#b45309"/>
+      <rect x="-6" y="126" width="2" height="34" fill="#b45309"/>
+      <rect x="4" y="126" width="2" height="34" fill="#b45309"/>
+    </g>
+    <rect id="pin" x="-4" y="50" width="8" height="140" fill="#8b929b" stroke="#5b6470"/>
+  </defs>
+  <g transform="translate(76 0)">
+    <use href="#board"/><use href="#pin"/>
+    <path d="M-24 126 Q-6 122 -4 92 H4 Q6 122 24 126 Z" fill="#a9b1ba" stroke="#5b6470"/>
+    <text y="222" text-anchor="middle" font-weight="600">Good</text>
+    <text y="240" text-anchor="middle" fill="#5b6470" font-size="12">concave, covers the pad</text>
+  </g>
+  <g transform="translate(228 0)">
+    <use href="#board"/><use href="#pin"/>
+    <ellipse cx="0" cy="100" rx="18" ry="14" fill="#a9b1ba" stroke="#5b6470"/>
+    <text y="222" text-anchor="middle" font-weight="600">Cold</text>
+    <text y="240" text-anchor="middle" fill="#5b6470" font-size="12">a ball, pad not wetted</text>
+  </g>
+  <g transform="translate(380 0)">
+    <use href="#board"/><use href="#pin"/>
+    <path d="M-12 126 Q-5 124 -4 114 H4 Q5 124 12 126 Z" fill="#a9b1ba" stroke="#5b6470"/>
+    <text y="222" text-anchor="middle" font-weight="600">Too little</text>
+    <text y="240" text-anchor="middle" fill="#5b6470" font-size="12">pad partly bare</text>
+  </g>
+  <g transform="translate(532 0)">
+    <use href="#board"/><use href="#pin"/>
+    <path d="M-28 126 C-34 70 34 70 28 126 Z" fill="#a9b1ba" stroke="#5b6470"/>
+    <text y="222" text-anchor="middle" font-weight="600">Too much</text>
+    <text y="240" text-anchor="middle" fill="#5b6470" font-size="12">a dome hides the pad edge</text>
+  </g>
+  <g transform="translate(684 0)">
+    <rect x="-70" y="130" width="140" height="26" fill="#cfd8c4" stroke="#7d8a70"/>
+    <g fill="#b45309">
+      <rect x="-44" y="126" width="14" height="4"/><rect x="-22" y="126" width="14" height="4"/>
+      <rect x="8" y="126" width="14" height="4"/><rect x="30" y="126" width="14" height="4"/>
+      <rect x="-32" y="126" width="2" height="34"/><rect x="-22" y="126" width="2" height="34"/>
+      <rect x="20" y="126" width="2" height="34"/><rect x="30" y="126" width="2" height="34"/>
+    </g>
+    <rect x="-30" y="50" width="8" height="140" fill="#8b929b" stroke="#5b6470"/>
+    <rect x="22" y="50" width="8" height="140" fill="#8b929b" stroke="#5b6470"/>
+    <path d="M-44 126 Q-28 118 -26 96 Q0 86 26 96 Q28 118 44 126 Z" fill="#a9b1ba" stroke="#5b6470"/>
+    <text y="222" text-anchor="middle" font-weight="600">Bridge</text>
+    <text y="240" text-anchor="middle" fill="#5b6470" font-size="12">two pins joined</text>
+  </g>
+  <text x="10" y="24" fill="#5b6470" font-size="12">Cross-section through a plated hole: grey pin, copper pad and barrel, solder on top.</text>
+</svg>

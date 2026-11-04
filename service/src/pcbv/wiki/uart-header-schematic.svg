@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 330" width="760" height="330" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="14" fill="#1b1f24">
+  <rect width="760" height="330" fill="#ffffff"/>
+  <g stroke="#1b1f24" stroke-width="2" fill="none" stroke-linecap="round">
+    <rect x="40" y="100" width="160" height="150"/>
+    <path d="M200 170 H290 M350 170 H560"/>
+    <rect x="290" y="162" width="60" height="16"/>
+    <path d="M200 210 H560"/>
+    <path d="M450 210 V140"/>
+    <rect x="442" y="90" width="16" height="50"/>
+    <path d="M450 90 V60 M432 60 H468"/>
+    <rect x="560" y="95" width="50" height="170"/>
+    <path d="M560 110 H530 V60 M512 60 H548"/>
+    <path d="M560 250 H530 V280 M516 280 H544 M521 286 H539 M526 292 H534"/>
+    <path d="M690 60 V170 M670 170 H710 M670 182 H710 M690 182 V260 M676 260 H704 M681 266 H699 M686 272 H694"/>
+    <path d="M672 60 H708"/>
+  </g>
+  <circle cx="450" cy="210" r="4" fill="#1b1f24"/>
+  <g fill="#ffffff" stroke="#1b1f24" stroke-width="2">
+    <circle cx="560" cy="110" r="4"/><circle cx="560" cy="170" r="4"/><circle cx="560" cy="210" r="4"/><circle cx="560" cy="250" r="4"/>
+  </g>
+  <text x="40" y="90" font-weight="600">U1</text>
+  <text x="206" y="246" fill="#5b6470">SoC</text>
+  <text x="192" y="175" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13">UART0_TX</text>
+  <text x="192" y="215" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13">UART0_RX</text>
+  <text x="320" y="154" text-anchor="middle" font-weight="600">R1</text>
+  <text x="320" y="196" text-anchor="middle">100R</text>
+  <text x="466" y="112" font-weight="600">R2</text>
+  <text x="466" y="130">10K</text>
+  <text x="450" y="50" text-anchor="middle" font-weight="600">3V3</text>
+  <text x="530" y="50" text-anchor="middle" font-weight="600">3V3</text>
+  <text x="690" y="50" text-anchor="middle" font-weight="600">3V3</text>
+  <text x="716" y="176" font-weight="600">C1</text>
+  <text x="716" y="194">100N</text>
+  <text x="585" y="85" text-anchor="middle" font-weight="600">J1</text>
+  <g font-size="12" fill="#5b6470"><text x="572" y="114">1</text><text x="572" y="174">2</text><text x="572" y="214">3</text><text x="572" y="254">4</text></g>
+  <g font-family="JetBrains Mono, monospace" font-size="12"><text x="584" y="114">3V3</text><text x="584" y="174">TX</text><text x="584" y="214">RX</text><text x="584" y="254">GND</text></g>
+  <g fill="#b45309" font-size="12">
+    <text x="40" y="282">No dot where R2's wire crosses TX: not connected.</text>
+    <text x="40" y="300">Dot on RX: R2 joins the RX net.</text>
+    <text x="40" y="318">Every 3V3 label is the same net, so C1 sits across 3V3 and GND.</text>
+  </g>
+</svg>

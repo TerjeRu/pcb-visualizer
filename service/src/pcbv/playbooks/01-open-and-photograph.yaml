@@ -1,0 +1,89 @@
+id: open-and-photograph
+version: 1
+title: Open and photograph
+summary: Take the board out of its case safely. Record what is on it before you touch anything.
+
+steps:
+  - id: prepare
+    title: Unplug and write down what you have
+    why: |
+      Every later step needs the exact model. Routers of the same brand often have revisions with
+      different chips. Forum posts help only if they match your revision. Unplug the router
+      first. Its power supply can hold charge for a short time after you pull the cable.
+    do: |
+      1. Pull the power cable and every network cable.
+      2. Read the label on the bottom. Find the model, the hardware revision and any mark like "rev B" or "V2".
+      3. Type the model and revision into **Device** in the Board panel on the left.
+      4. Before you handle the board, touch something grounded to discharge static. A radiator or the metal case of a plugged-in PC works.
+    gates:
+      - id: unplugged
+        text: Power and network cables are out, and the board has been off for at least a minute.
+    checks:
+      - kind: meta
+        field: device
+        text: The board model is filled in.
+    wiki: [safety, static]
+
+  - id: open-case
+    title: Open the case
+    why: |
+      Screws, plastic clips or both hold a case shut. A forced clip snaps. If you find the hidden
+      screws first, the case stays whole. Opening a case usually voids the warranty, so decide now.
+    do: |
+      1. Look for screws under rubber feet and under labels. If a label has a dip when you press it, a screw is under it.
+      2. Undo the screws and keep them in a cup.
+      3. Start at a corner. Work a plastic spudger or an old card along the seam to release the clips.
+      4. Lift the board out by its edges. Unclip each antenna cable gently. Do not pull on the wire.
+    ask:
+      - id: opening
+        label: How it opened (for next time)
+        placeholder: "4 screws under the feet, clips on the long sides"
+        required: false
+    done_when: The bare board is on your desk and nothing is still connected to it.
+    wiki: [opening-cases]
+
+  - id: photos
+    title: Photograph both sides
+    why: |
+      A sharp photo is your map. You mark headers on it, zoom into chip markings and compare it
+      with photos that other people posted. Take the photos before probes and wires are on the
+      board, so the photos show the board clean.
+    do: |
+      1. Put the board on a plain, matte surface in even light. Daylight from a window works. Do not use the flash.
+      2. Hold the camera straight above the board so the board fills the frame. Take a few photos and keep the sharpest.
+      3. Take the same photos of the back.
+      4. Pick **front** or **back** in the box next to **Add photo**. Then add each photo.
+      5. Optional: take close-ups of the main chips and add them as **detail** photos. They help you read the markings.
+    checks:
+      - kind: photos
+        side: front
+        text: A front photo is added.
+      - kind: photos
+        side: back
+        text: A back photo is added.
+    done_when: Both sides are in the app and you can read chip markings when you zoom in.
+    wiki: [photographing-boards]
+
+  - id: chips
+    title: Identify the main chips
+    why: |
+      The SoC (the main processor) tells you which software and bootloader to expect. The flash
+      chip holds the firmware, and later playbooks read it. Use the markings as search terms for
+      datasheets and for notes from other people who own the same hardware.
+    do: |
+      1. Find the **SoC**. It is usually the largest square chip, often under a metal shield or heatsink. Do not pry off a shield yet, because many shields have a removable lid.
+      2. Find the **flash**. It is often an 8-pin chip (SOIC-8) near the SoC, marked like 25Q128 or MX25L.
+      3. Find the **RAM**. It is one or two rectangular chips close to the SoC.
+      4. Zoom into your photos and type the markings below exactly as printed. If the text is laser-etched, hold a phone torch at an angle.
+    ask:
+      - id: soc
+        label: SoC marking
+        placeholder: "ARC7621 or BCM63138"
+      - id: flash
+        label: Flash marking
+        placeholder: "25Q128JVSQ"
+      - id: ram
+        label: RAM marking
+        required: false
+    done_when: You know which SoC and flash chip this board uses.
+    wiki: [soc, spi-flash]

@@ -1,0 +1,19 @@
+# Sections of the Wiki index, in reading order. Every built-in page belongs in exactly one section;
+# the tests check that. Pages in ~/hw/wiki that are not named here appear under "Your pages".
+sections:
+  - title: Start here
+    pages: [start-here, tutorial, what-you-need, safety, method-and-ethics, workspace, settings-and-privacy, assistant-setup, github-backup, first-live-board]
+  - title: Electricity
+    pages: [electricity-basics, ground, logic-levels, static]
+  - title: Schematics and datasheets
+    pages: [reading-schematics, schematic-symbols, datasheets]
+  - title: Tools
+    pages: [multimeter, usb-uart-adapter, wiring, soldering, serial-terminals, logic-analyzer, sigrok]
+  - title: The board
+    pages: [opening-cases, photographing-boards, board-parts, chip-packages, headers, soc, spi-flash]
+  - title: Interfaces
+    pages: [uart, spi, i2c, jtag]
+  - title: Boot and firmware
+    pages: [boot-chain, reading-boot-logs, u-boot, flash-and-filesystems, firmware-basics]
+  - title: Reference
+    pages: [glossary]

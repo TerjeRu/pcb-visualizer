@@ -1,0 +1,9 @@
+# Written by pcbv repo init. The commit guard (.githooks/pre-commit) enforces the same rules.
+dumps/
+extracted/
+.pcbv/
+*.tmp
+# Photo originals stay local; resized copies next to them are committed.
+boards/*/assets/photos/originals/
+# Datasheet PDFs are large and re-downloadable; notes about them are committed.
+library/datasheets/*.pdf

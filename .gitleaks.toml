@@ -1,0 +1,15 @@
+# Secret scan for this repository: the rules of the data repository template, plus the files that hold
+# test data on purpose. The redaction, data-repo and export tests need fake router passwords, password
+# hashes and PEM keys, and the vendored xterm.js has a minified name that looks like an API key.
+# A path here is skipped completely, so add a file only when all its findings are deliberate test data.
+title = "pcb-visualizer source"
+
+[extend]
+path = "service/src/pcbv/template/gitleaks.toml"
+
+[[allowlists]]
+description = "deliberate fake credentials in tests, and vendored minified code"
+paths = [
+  '''^service/tests/test_(?:redact|datarepo|export)\.py$''',
+  '''^app/vendor/xterm/xterm\.js$''',
+]

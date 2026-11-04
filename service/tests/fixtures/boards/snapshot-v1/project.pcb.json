@@ -1,0 +1,74 @@
+{
+  "format": "pcb-visualizer-project",
+  "schemaVersion": 1,
+  "meta": {
+    "id": "prj_299b2afac6",
+    "name": "Fixture board",
+    "device": "Fixture device",
+    "notes": "",
+    "created": "2026-10-30T18:40:37.089Z",
+    "modified": "2026-10-30T18:40:37.114Z"
+  },
+  "assets": [
+    {
+      "id": "img_front",
+      "kind": "image",
+      "path": "assets/front.png",
+      "label": "img_front",
+      "side": "front",
+      "width": 8,
+      "height": 6
+    }
+  ],
+  "markers": [
+    {
+      "id": "mk_j1",
+      "assetId": "img_front",
+      "schematicId": "sch_j1",
+      "shape": "box",
+      "label": "J1",
+      "color": "#f59e0b",
+      "x": 10,
+      "y": 20,
+      "w": 40,
+      "h": 20
+    }
+  ],
+  "schematics": [
+    {
+      "id": "sch_j1",
+      "kind": "header",
+      "name": "Header",
+      "rows": 1,
+      "cols": 4,
+      "pitch": 2.54,
+      "numbering": "row",
+      "rotation": 0,
+      "notes": "",
+      "pins": [
+        {
+          "index": 1,
+          "role": "GND",
+          "label": "GND",
+          "color": "",
+          "note": ""
+        },
+        {
+          "index": 2,
+          "role": "TX",
+          "label": "TX",
+          "color": "",
+          "note": "3.3V logic"
+        },
+        {
+          "index": 3,
+          "role": "RX",
+          "label": "RX",
+          "color": "",
+          "note": ""
+        }
+      ]
+    }
+  ],
+  "components": []
+}

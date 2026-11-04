@@ -1,0 +1,129 @@
+id: find-uart
+version: 1
+title: Find the UART
+summary: Find the serial console pins with a multimeter. Do not connect anything yet.
+requires: [open-and-photograph]
+
+steps:
+  - id: candidates
+    title: Spot candidate headers
+    why: |
+      Almost every router has a serial console (UART) that the maker used during development.
+      It is usually a row of 4 pins or pads, sometimes 3 or 5. It is the easiest way to see
+      the bootloader and get a shell. If you find it on the photo first, you probe the right
+      place.
+    do: |
+      Look for these signs:
+      - a row of 4 holes or pads, often without pins, with 2.54 mm or 2.0 mm spacing
+      - silkscreen text like **J1**, **CON3**, **UART**, **TX/RX** or **GND/VCC**
+      - a place close to the SoC, often near a board edge
+
+      Choose **Draw box** and drag a box around each candidate. Type its silkscreen label in the Header panel. Set the rows and columns to match the board. A square pad usually marks pin 1.
+    checks:
+      - kind: markers
+        min: 1
+        text: At least one candidate header is marked.
+    done_when: Every likely candidate is boxed and its pin count matches the board.
+    wiki: [uart, headers]
+
+  - id: ground
+    title: Find ground with continuity, unpowered
+    why: |
+      Ground is the reference for every other measurement. It is the safest pin to find,
+      because the board stays off. A continuity test beeps when two points connect. The large
+      metal parts of the board are ground.
+    do: |
+      1. Set the meter to continuity (the beeper symbol). Touch the probes together. The meter must beep.
+      2. Put the black probe on a known ground. Use the metal shell of a USB or Ethernet port, a shield can or a screw hole ring.
+      3. Touch the red probe to each pin of the candidate header in turn.
+      4. The pin that beeps is GND. Click it in the Header panel and press **g**.
+      5. Record the reading, for example `pcbv measure <board> J4 4 beep`, or the resistance, like `0.3ohm`. If `pcbv` is not on your PATH, run `uv run pcbv measure ...` in the service folder.
+    gates:
+      - id: unplugged
+        text: The board is unplugged. A continuity test on a powered board gives wrong readings and can damage the meter.
+      - id: meter
+        text: The meter beeps when the probes touch each other.
+    checks:
+      - kind: pin_role
+        roles: [GND]
+        text: A pin is marked GND.
+      - kind: reading
+        mode: [continuity, ohm]
+        powered: false
+        max: 2
+        role: GND
+        text: An unpowered continuity or low-resistance reading is recorded on that GND pin.
+    done_when: You know which pin is ground, and it is recorded.
+    wiki: [multimeter, ground]
+
+  - id: voltages
+    title: Measure voltages, powered
+    why: |
+      With power on, each UART pin has a typical voltage. Power (VCC) stays steady at the board's
+      logic level. TX idles high and wobbles while the board prints text. RX stays high or
+      floats. The measurement also gives the logic level, which decides the safe adapter setting
+      later.
+    do: |
+      1. Set the meter to DC volts, 20 V range (or auto).
+      2. Put the black probe on the GND pin you found, or on the port shell.
+      3. Plug in the board. Put the red probe on one pin and read the meter for the first 30 seconds of boot. Read it again when the reading settles.
+      4. Record each pin, for example `pcbv measure <board> J4 1 3.31V`.
+
+      Keep the red probe steady. If the probe slips and bridges two pins, it can damage the board. This is the main risk in this step.
+    gates:
+      - id: no-adapter
+        text: No USB-serial adapter is connected to the board yet.
+      - id: steady
+        text: The board lies flat and the probes cannot slip onto neighbouring pins.
+    checks:
+      - kind: reading
+        mode: [dc]
+        powered: true
+        count: 2
+        text: Powered DC readings are recorded on at least two pins.
+    done_when: Every pin of the header has a powered reading.
+    wiki: [multimeter, logic-levels]
+
+  - id: tx-vcc
+    title: Tell TX and VCC apart
+    why: |
+      TX and VCC can both read about 3.3 V when idle, but they behave differently. VCC is
+      steady. TX drops and jumps while the bootloader and kernel print text, because the meter
+      averages the fast pulses. If you connect your adapter to VCC by mistake, the adapter can
+      break.
+    do: |
+      1. Put the red probe on one pin. Power-cycle the board. Repeat for each pin.
+      2. The pin whose reading flickers or dips in the first seconds of boot is **TX**. Press **t**.
+      3. The pin that stays at a steady 3.3 V (or 1.8 V or 5 V) is **VCC**. Press **3** for 3.3 V, or **v** for another voltage. Leave this pin unconnected.
+    checks:
+      - kind: pin_role
+        roles: [TX]
+        text: A pin is marked TX.
+      - kind: pin_role
+        roles: [3V3, VCC, 5V]
+        text: A pin is marked as power (3V3, VCC or 5V).
+    done_when: TX and the power pin are marked.
+    wiki: [uart]
+
+  - id: rx
+    title: Mark RX and the logic level
+    why: |
+      RX is the board's input, so it does not change during boot. It is usually pulled up to the
+      logic level, or it floats low. On a 4-pin header it is the pin that is left. The logic level
+      is the voltage that your adapter must use. A 3.3 V adapter on a 1.8 V board can damage it.
+    do: |
+      1. Mark the remaining pin as **RX** with **r**.
+      2. Use the VCC and idle TX readings to find the logic level. Write it below.
+      3. Check that your adapter can use this level. A CP2102 always signals at 3.3 V, whatever its jumper says. The next playbook shows you how to measure the adapter.
+    ask:
+      - id: logic-level
+        label: Logic level
+        placeholder: "3.3 V"
+    checks:
+      - kind: pin_role
+        roles: [RX]
+        text: A pin is marked RX.
+      - kind: uart_header
+        text: One header has GND, TX and RX marked.
+    done_when: You know GND, TX, RX and the logic level. The next playbook connects the adapter.
+    wiki: [uart, logic-levels]

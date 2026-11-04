@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 325" width="760" height="325" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="13" fill="#1b1f24">
+  <rect width="760" height="325" fill="#ffffff"/>
+  <rect x="30" y="110" width="130" height="110" fill="#eef0f3" stroke="#1b1f24" stroke-width="2"/>
+  <text x="95" y="100" text-anchor="middle" font-weight="600">Controller</text>
+  <text x="152" y="145" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="12">SDA</text>
+  <text x="152" y="195" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="12">SCL</text>
+  <path d="M160 140 H730 M160 190 H730" stroke="#1b1f24" stroke-width="2" fill="none"/>
+  <path d="M210 40 V60 M210 100 V140" stroke="#1b1f24" stroke-width="2" fill="none"/><rect x="202" y="60" width="16" height="40" fill="none" stroke="#1b1f24" stroke-width="2"/><circle cx="210" cy="140" r="4" fill="#1b1f24"/>
+  <text x="224" y="85" font-size="12">R1 4K7</text>
+  <path d="M300 40 V60 M300 100 V190" stroke="#1b1f24" stroke-width="2" fill="none"/><rect x="292" y="60" width="16" height="40" fill="none" stroke="#1b1f24" stroke-width="2"/><circle cx="300" cy="190" r="4" fill="#1b1f24"/>
+  <text x="314" y="85" font-size="12">R2 4K7</text>
+  <path d="M195 40 H315" stroke="#1b1f24" stroke-width="2" fill="none"/>
+  <text x="255" y="32" text-anchor="middle" font-weight="600">3V3</text>
+  <path d="M380 140 V230 M420 190 V230" stroke="#1b1f24" stroke-width="2" fill="none"/><circle cx="380" cy="140" r="4" fill="#1b1f24"/><circle cx="420" cy="190" r="4" fill="#1b1f24"/>
+  <rect x="360" y="230" width="80" height="50" fill="#eef0f3" stroke="#1b1f24" stroke-width="2"/>
+  <text x="400" y="252" text-anchor="middle" font-weight="600">EEPROM</text>
+  <text x="400" y="270" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#b45309">0x50</text>
+  <path d="M520 140 V230 M560 190 V230" stroke="#1b1f24" stroke-width="2" fill="none"/><circle cx="520" cy="140" r="4" fill="#1b1f24"/><circle cx="560" cy="190" r="4" fill="#1b1f24"/>
+  <rect x="500" y="230" width="80" height="50" fill="#eef0f3" stroke="#1b1f24" stroke-width="2"/>
+  <text x="540" y="252" text-anchor="middle" font-weight="600">Sensor</text>
+  <text x="540" y="270" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#b45309">0x48</text>
+  <path d="M660 140 V230 M700 190 V230" stroke="#1b1f24" stroke-width="2" fill="none"/><circle cx="660" cy="140" r="4" fill="#1b1f24"/><circle cx="700" cy="190" r="4" fill="#1b1f24"/>
+  <rect x="640" y="230" width="80" height="50" fill="#eef0f3" stroke="#1b1f24" stroke-width="2"/>
+  <text x="680" y="252" text-anchor="middle" font-weight="600">RTC</text>
+  <text x="680" y="270" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#b45309">0x68</text>
+  <text x="30" y="310" fill="#5b6470" font-size="12">Every device only pulls a line low or lets go; the two pull-ups bring each line back to 3.3 V.</text>
+</svg>

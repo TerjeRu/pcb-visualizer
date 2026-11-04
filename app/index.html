@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="en" data-assistant="off" data-git="off">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>PCB Visualizer</title>
+  <link rel="stylesheet" href="vendor/xterm/xterm.css">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/theme.js"></script>
+  <script src="vendor/xterm/xterm.js"></script>
+  <script src="vendor/xterm/addon-fit.js"></script>
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <header class="bar">
+    <h1>PCB Visualizer</h1>
+    <label class="field-inline" id="board-field">Board
+      <select id="board-select" disabled></select>
+    </label>
+    <form id="new-board-form" class="field-inline" autocomplete="off">
+      <input id="new-board-name" type="text" maxlength="120" placeholder="New board name" aria-label="New board name">
+      <button type="submit" id="new-board-button" disabled>Create</button>
+    </form>
+    <span class="menu-anchor"><button type="button" id="panels-open" aria-haspopup="menu" aria-expanded="false" aria-keyshortcuts="Control+Shift+P" title="Find, show, move or put away panels (Ctrl+Shift+P)" disabled>Panels</button></span>
+    <div class="field-inline workspace" id="workspace-bar">
+      <label class="field-inline">Workspace <select id="workspace-select"></select></label>
+      <button type="button" id="workspace-save" title="Save the current layout under a new name">Save as…</button>
+      <button type="button" id="workspace-reset" title="Put the panels back as this workspace started">Reset layout</button>
+      <form id="workspace-name-form" class="field-inline" autocomplete="off" hidden>
+        <input id="workspace-name" type="text" maxlength="40" placeholder="Name for this layout" aria-label="Name for this layout">
+        <button type="submit" class="primary">Save</button>
+        <button type="button" id="workspace-name-cancel">Cancel</button>
+      </form>
+    </div>
+    <div class="segmented" role="group" aria-label="Guidance">
+      <button type="button" id="guidance-guided" aria-pressed="true" title="Steps in order, with explanations and hints">Guided</button>
+      <button type="button" id="guidance-expert" aria-pressed="false" title="Every step open, without explanations or hints">Expert</button>
+    </div>
+    <button type="button" id="settings-open" aria-haspopup="dialog">Settings</button>
+    <button type="button" id="tutorial-leave" hidden>Leave tutorial</button>
+    <span id="status" class="status" data-state="idle" role="status">Not connected</span>
+    <p id="storage-warning" role="status" hidden></p>
+  </header>
+
+  <p id="message" class="message" role="alert" hidden></p>
+
+  <div id="delivery-notice" class="notice" role="alert" hidden>
+    <span id="delivery-text"></span>
+    <button type="button" id="delivery-retry">Retry</button>
+    <button type="button" id="delivery-back">Bring back</button>
+    <button type="button" id="delivery-dismiss">Dismiss</button>
+  </div>
+
+  <main>
+    <section id="token-panel" class="card narrow" hidden>
+      <h2>Sign in</h2>
+      <p id="token-text"></p>
+      <form id="token-form" autocomplete="off">
+        <label>Token
+          <input id="token-input" type="password" spellcheck="false" autocapitalize="off">
+        </label>
+        <button type="submit">Connect</button>
+      </form>
+    </section>
+
+    <section id="empty-panel" class="card narrow" hidden>
+      <div id="no-boards">
+        <h2>No boards yet</h2>
+        <p><span class="guide">Create one with the box at the top, or run <code>pcbv new "Board name"</code>.</span><span class="terse">Create one above, or run <code>pcbv new</code>.</span></p>
+      </div>
+      <div id="welcome" hidden>
+        <h2>Welcome to PCB Visualizer</h2>
+        <p><span class="guide">A workbench for documenting the debug interfaces of hardware you own: board photos with header markers, pinouts, serial consoles, logic captures, playbooks and a wiki. Each board is a plain folder in your data folder. Nothing leaves this computer unless you turn on git backup or the assistant.</span><span class="terse">Boards are plain folders. Nothing leaves this computer unless git backup or the assistant is on.</span></p>
+        <p>Data folder: <code id="welcome-folder"></code></p>
+        <div class="step-actions">
+          <button type="button" id="welcome-tutorial" class="primary">Start the tutorial</button>
+          <button type="button" id="welcome-create">Create my first board</button>
+          <button type="button" id="welcome-start">Read Start here</button>
+          <button type="button" id="welcome-needs">What you need</button>
+        </div>
+        <p id="welcome-tutorial-note" class="hint">About 20 minutes. No hardware needed.</p>
+        <p class="hint">Optional, any time later:</p>
+        <div class="step-actions">
+          <button type="button" id="welcome-git">Set up git backup</button>
+          <button type="button" id="welcome-assistant">Set up the assistant</button>
+        </div>
+        <h3>Bench check</h3>
+        <p class="hint guide">The software the app can check. The bench tools for a real board are on the What you need page.</p>
+        <ul id="welcome-checks" class="bench-checks" aria-label="Bench check"></ul>
+        <div class="step-actions">
+          <button type="button" id="welcome-checks-again">Check again</button>
+          <button type="button" id="welcome-skip">Skip</button>
+          <button type="button" id="welcome-back" class="primary" hidden>Back to my boards</button>
+        </div>
+      </div>
+    </section>
+
+    <div id="board-panel" class="board" hidden>
+      <div id="board-empty" class="board-empty" hidden>
+        <p><span class="guide">Every panel is in its own window or put away. The Panels menu brings them back.</span><span class="terse">Empty</span></p>
+        <button type="button" id="board-empty-panels" aria-keyshortcuts="Control+Shift+P">Open the Panels menu <kbd>Ctrl+Shift+P</kbd></button>
+      </div>
+      <div class="region" id="region-left" data-region="left"><div class="region-bar"></div><div class="region-body"></div></div>
+      <div class="region" id="region-center" data-region="center"><div class="region-bar"></div><div class="region-body"></div></div>
+      <div class="region" id="region-right" data-region="right"><div class="region-bar"></div><div class="region-body"></div></div>
+      <div class="region" id="region-bottom" data-region="bottom"><div class="region-bar"></div><div class="region-body"></div></div>
+
+      <div id="panel-store" hidden>
+        <section class="panel" id="panel-board" data-panel="board">
+          <section class="card" aria-labelledby="details-heading">
+            <h2 id="details-heading">Board</h2>
+            <form id="details-form" autocomplete="off">
+              <label>Name <input id="field-name" type="text" maxlength="200"></label>
+              <label>Device <input id="field-device" type="text" maxlength="200"></label>
+              <label>Notes <textarea id="field-notes" rows="3"></textarea></label>
+            </form>
+            <ul id="counts" class="counts" aria-label="Contents"></ul>
+            <details id="export" class="export">
+              <summary>Export</summary>
+              <form id="export-form" autocomplete="off">
+                <fieldset>
+                  <legend>Formats</legend>
+                  <label class="check"><input type="checkbox" name="format" value="photo" checked> Annotated photos (PNG)</label>
+                  <label class="check"><input type="checkbox" name="format" value="svg"> Annotated photos (SVG)</label>
+                  <label class="check"><input type="checkbox" name="format" value="report" checked> Report (Markdown)</label>
+                  <label class="check"><input type="checkbox" name="format" value="csv" checked> Pinouts (CSV)</label>
+                  <label class="check"><input type="checkbox" name="format" value="json"> Pinouts (JSON)</label>
+                  <label class="check"><input type="checkbox" name="format" value="zip"> The board folder (zip)</label>
+                </fieldset>
+                <label class="check"><input id="export-redact" type="checkbox" checked> Redact credentials, serial numbers and addresses</label>
+                <p id="export-warning" class="hint warning" hidden>Not redacted: the files can contain serial numbers, MAC addresses and passwords. Keep them private.</p>
+                <p class="hint guide">Files go to a new folder under <code>~/pcbv-exports</code>. Text printed in the photos, such as a label with a serial number, is not redacted; look at them before sharing.</p>
+                <button type="submit" id="export-run">Export</button>
+              </form>
+              <p id="export-result" class="hint" role="status"></p>
+            </details>
+            <p class="hint guide">Changes are saved when you leave a field.</p>
+            <p class="hint guide explainer">New to this? <a href="#wiki/start-here" data-wiki="start-here" class="wiki-link">Start here</a> lists what to read before opening a board, and <a href="#wiki/method-and-ethics" data-wiki="method-and-ethics" class="wiki-link">Method and ethics</a> explains how to work.</p>
+          </section>
+        </section>
+
+        <section class="panel" id="panel-inspector" data-panel="inspector">
+          <section class="card" aria-labelledby="inspector-heading">
+            <h2 id="inspector-heading">Header</h2>
+            <p class="hint guide explainer">A header is a row or grid of pins. <a href="#wiki/headers" data-wiki="headers" class="wiki-link">Headers and pads</a> covers pin 1 and numbering; <a href="#wiki/uart" data-wiki="uart" class="wiki-link">UART</a> and <a href="#wiki/jtag" data-wiki="jtag" class="wiki-link">JTAG and SWD</a> cover the usual pin roles.</p>
+            <section id="annotation-box" aria-labelledby="annotation-heading" hidden>
+              <h3 id="annotation-heading" class="subhead">Markers and callouts</h3>
+              <ul id="annotation-list" class="annotation-list"></ul>
+            </section>
+            <p id="inspector-empty" class="hint"><span class="guide">Choose <strong>Draw box</strong> and drag a box around a header or pad row on the photo, or <strong>Callout</strong> and click a part to label it. Click either to edit it here.</span><span class="terse">Nothing selected.</span></p>
+            <form id="callout-form" autocomplete="off" hidden>
+              <label>Text <input id="callout-text" type="text" maxlength="200" placeholder="Flash, 25Q128"></label>
+              <label>Wiki page <select id="callout-wiki"></select></label>
+              <div id="callout-guess" class="guess-note" hidden>
+                <p id="callout-guess-text"></p>
+                <p class="hint guide">A guess from the photo. Check the marking yourself, then mark it as checked.</p>
+                <button type="button" id="callout-confirm">Mark as checked</button>
+              </div>
+              <p class="hint guide">Drag the label to move it; drag the dot to move what it points at.</p>
+              <div class="step-actions">
+                <a href="#" id="callout-open" class="wiki-link" hidden>Open wiki page</a>
+                <button type="button" id="callout-delete" class="danger">Remove callout</button>
+              </div>
+            </form>
+            <form id="inspector-form" autocomplete="off" hidden>
+              <div class="row2">
+                <label>Silkscreen label <input id="marker-label" type="text" maxlength="40" placeholder="J4"></label>
+                <label>Name <input id="header-name" type="text" maxlength="80" placeholder="UART?"></label>
+              </div>
+              <div class="row4">
+                <label>Rows <input id="header-rows" type="number" min="1" max="64"></label>
+                <label>Columns <input id="header-cols" type="number" min="1" max="64"></label>
+                <label>Rotation <select id="header-rotation"></select></label>
+              </div>
+              <label>Pin numbering <select id="header-numbering"></select></label>
+              <div id="pin-grid" class="pin-grid" role="group" aria-label="Pins"></div>
+              <p id="pin-keys" class="hint guide"></p>
+              <fieldset id="pin-form" class="pin-form" hidden>
+                <legend id="pin-heading"></legend>
+                <div class="row2">
+                  <label>Role <select id="pin-role"></select></label>
+                  <label>Label <input id="pin-label" type="text" maxlength="40"></label>
+                </div>
+                <label>Note <input id="pin-note" type="text" maxlength="400" placeholder="3.29 V idle, flickers at boot"></label>
+                <div id="pin-guess" class="guess-note" hidden>
+                  <p id="pin-guess-text"></p>
+                  <p class="hint guide">A guess from the photo, not a measurement. Confirm ground by continuity and the level with a voltage reading before you wire anything.</p>
+                  <button type="button" id="pin-guess-use"></button>
+                </div>
+                <ol id="pin-readings" class="readings" aria-label="Readings, newest first" hidden></ol>
+                <p id="pin-wiki" class="hint guide" hidden></p>
+                <div class="step-actions">
+                  <button type="button" id="pin-ask" data-ai><span class="guide">Ask the assistant about this pin</span><span class="terse">Ask</span></button>
+                  <button type="button" id="pin-clear">Clear pin</button>
+                </div>
+              </fieldset>
+              <label>Header notes <textarea id="header-notes" rows="2"></textarea></label>
+              <button type="button" id="marker-delete" class="danger">Remove marker</button>
+            </form>
+          </section>
+        </section>
+
+        <section class="panel panel-screen" id="panel-feed" data-panel="feed">
+          <section class="screen" aria-labelledby="feed-heading">
+            <h2 id="feed-heading">Changes</h2>
+            <p class="hint guide explainer">Every edit to this board as it happens, newest first, with who made it. Recording changes is part of <a href="#wiki/method-and-ethics" data-wiki="method-and-ethics" class="wiki-link">Method and ethics</a>.</p>
+            <ol id="feed" class="feed" role="log" aria-live="polite"></ol>
+            <p id="changes-empty" class="hint"><span class="guide">No changes yet. Add a photo or mark a header and it appears here.</span><span class="terse">No changes.</span></p>
+          </section>
+        </section>
+
+        <section class="panel panel-photo" id="panel-photo" data-panel="photo">
+          <section class="viewer card" aria-label="Board photo">
+            <div class="toolbar">
+              <div id="photo-tabs" class="tabs" role="group" aria-label="Photos"></div>
+              <label id="add-photo" class="button">Add photo
+                <input id="photo-file" class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp">
+              </label>
+              <select id="photo-side" aria-label="Which side the new photo shows">
+                <option value="front">front</option><option value="back">back</option>
+                <option value="detail">detail</option><option value="other">other</option>
+              </select>
+              <span class="sep"></span>
+              <button type="button" id="tool-select" aria-pressed="true">Select</button>
+              <button type="button" id="tool-box" aria-pressed="false">Draw box</button>
+              <button type="button" id="tool-callout" aria-pressed="false" title="Click a part to label it">Callout</button>
+              <span class="sep"></span>
+              <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+              <button type="button" id="zoom-fit">Fit</button>
+              <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+              <span id="zoom-label" class="zoom"></span>
+              <span class="sep"></span>
+              <button type="button" id="photo-ask" data-ai><span class="guide">Ask about this photo</span><span class="terse">Ask</span></button>
+            </div>
+            <p class="hint guide explainer"><a href="#wiki/board-parts" data-wiki="board-parts" class="wiki-link">Parts on a router board</a> and <a href="#wiki/chip-packages" data-wiki="chip-packages" class="wiki-link">Chip packages and markings</a> help you name what you see; <a href="#wiki/photographing-boards" data-wiki="photographing-boards" class="wiki-link">Photographing boards</a> covers taking the photo.</p>
+            <div id="stage" class="stage" tabindex="-1">
+              <p id="viewer-empty" class="hint empty"><span class="guide">No photos yet. Take a sharp, straight-on photo of the board in good light and add it with <strong>Add photo</strong>. The original stays on this machine; a smaller copy without location data is kept with the board.</span><span class="terse">No photos.</span></p>
+              <div id="canvas" class="canvas" hidden>
+                <img id="photo" alt="" draggable="false">
+                <svg id="overlay" class="overlay" data-tool="select" xmlns="http://www.w3.org/2000/svg"></svg>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="panel" id="panel-playbook" data-panel="playbook">
+          <div class="card panel-card">
+            <div id="tab-playbook">
+              <h2 id="playbook-heading">Playbook</h2>
+              <p class="hint guide explainer">Each step links to the background it needs. <a href="#wiki/first-live-board" data-wiki="first-live-board" class="wiki-link">Your first live board</a> shows how the playbooks fit together.</p>
+              <p id="playbook-empty" class="hint">No playbooks found.</p>
+              <ul id="playbook-problems" class="problems" aria-label="Playbook files with problems" hidden></ul>
+              <div id="playbook-body" hidden>
+                <label>Playbook <select id="playbook-select"></select></label>
+                <p id="playbook-summary" class="hint"></p>
+                <p id="playbook-requires" class="requires" hidden></p>
+                <ol id="step-list" class="step-list" aria-label="Steps"></ol>
+                <div id="step-detail" class="step-detail" aria-live="polite"></div>
+                <div id="playbook-restart" class="playbook-restart" hidden></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-wiki" data-panel="wiki">
+          <div class="card panel-card">
+            <div id="tab-wiki">
+              <div class="wiki-bar">
+                <button type="button" id="wiki-back" hidden></button>
+                <button type="button" id="wiki-index-button">All pages</button>
+              </div>
+              <p class="hint guide explainer">Reference pages from the basics up. Pages you add under <code>~/hw/wiki</code> appear here too. <a href="#wiki/start-here" data-wiki="start-here" class="wiki-link">Start here</a> says what to read first.</p>
+              <p id="wiki-status" class="hint" hidden></p>
+              <ul id="wiki-index" class="wiki-index" aria-label="Wiki pages"></ul>
+              <article id="wiki-page" class="md wiki-page" hidden></article>
+              <p id="wiki-source" class="hint wiki-source"></p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-console" data-panel="console">
+          <div class="card panel-card">
+            <div id="tab-console" class="console-tab">
+              <div class="serial-bar">
+                <select id="serial-port" aria-label="Serial port"></select>
+                <select id="serial-baud" aria-label="Speed"></select>
+                <button type="button" id="serial-detect" title="Try the common speeds and pick the one with readable output">Detect</button>
+                <button type="button" id="serial-refresh" title="Look for serial ports again">↻</button>
+                <button type="button" id="serial-connect" class="primary">Connect</button>
+              </div>
+              <p id="serial-status" class="hint" role="status">Not connected.</p>
+              <div class="serial-bar" id="vdev-bar" hidden>
+                <button type="button" id="vdev-start">Start the virtual board</button>
+                <button type="button" id="vdev-stop">Stop the virtual board</button>
+                <span class="hint guide">A practice board on this computer. It boots like a real router when you connect at 115200 baud.</span>
+              </div>
+              <p class="hint guide explainer">The console talks to the board over three wires: GND, TX and RX. See <a href="#wiki/uart" data-wiki="uart" class="wiki-link">UART</a>, <a href="#wiki/usb-uart-adapter" data-wiki="usb-uart-adapter" class="wiki-link">USB-UART adapter</a> and <a href="#wiki/wiring" data-wiki="wiring" class="wiki-link">Wiring</a>.</p>
+              <div id="serial-output" class="serial-output" role="log" aria-live="off" aria-label="Console output" tabindex="0"></div>
+              <form id="serial-form" class="serial-form" autocomplete="off">
+                <input id="serial-input" type="text" spellcheck="false" autocapitalize="off" placeholder="Type a command and press Enter" aria-label="Command">
+                <button type="submit" id="serial-send">Send</button>
+              </form>
+              <div class="serial-keys">
+                <button type="button" id="key-enter" title="Send Enter on its own">Enter</button>
+                <button type="button" id="key-space" title="Send a space, for example to stop autoboot">Any key</button>
+                <button type="button" id="key-ctrl-c" title="Interrupt the running command">Ctrl-C</button>
+                <button type="button" id="serial-clear" title="Clear the screen (the capture file keeps everything)">Clear</button>
+                <button type="button" id="serial-ask" data-ai><span class="guide">Ask about this log</span><span class="terse">Ask</span></button>
+              </div>
+              <div id="serial-confirm" class="serial-confirm" role="alertdialog" aria-labelledby="confirm-title" hidden>
+                <p id="confirm-title"><strong>This command can change the device for good.</strong></p>
+                <p id="confirm-reason"></p>
+                <form id="confirm-form" autocomplete="off">
+                  <label>Type <code id="confirm-command"></code> again to send it
+                    <input id="confirm-input" type="text" spellcheck="false" autocapitalize="off">
+                  </label>
+                  <p id="confirm-error" class="error-text" hidden>That does not match. Nothing was sent.</p>
+                  <div class="step-actions">
+                    <button type="submit" class="danger">Send it</button>
+                    <button type="button" id="confirm-cancel">Cancel</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-timeline" data-panel="timeline">
+          <div class="card panel-card">
+            <div id="tab-timeline">
+              <div class="timeline-bar">
+                <div id="timeline-filters" class="chips" role="group" aria-label="Show"></div>
+                <button type="button" id="timeline-refresh" data-git-only title="Reload commits from the data repo">↻</button>
+              </div>
+              <p class="hint guide explainer"><span data-git-only>Every change, capture and commit on this board, newest first.</span><span data-git-off-only>Every change and capture on this board, newest first.</span> Click an entry to go to what it is about.</p>
+              <section id="timeline-log" class="timeline-log" aria-labelledby="timeline-log-title" hidden>
+                <div class="timeline-log-head">
+                  <h4 id="timeline-log-title"></h4>
+                  <button type="button" id="timeline-log-close" aria-label="Close the log">✕</button>
+                </div>
+                <p id="timeline-log-path" class="hint wiki-source"></p>
+                <div id="timeline-log-output" class="serial-output" role="log" tabindex="0"></div>
+              </section>
+              <p id="timeline-status" class="hint"></p>
+              <div id="timeline-list" class="timeline-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-logic" data-panel="logic">
+          <div class="card panel-card">
+            <div id="tab-logic" class="logic-tab">
+              <div class="serial-bar">
+                <select id="logic-capture" aria-label="Logic capture"></select>
+                <label id="logic-import" class="button">Import capture
+                  <input id="logic-file" class="visually-hidden" type="file" accept=".sr,.csv,text/csv">
+                </label>
+              </div>
+              <p id="logic-status" class="hint" role="status"></p>
+              <p class="hint guide explainer">A logic analyzer records a signal without driving it. See <a href="#wiki/logic-analyzer" data-wiki="logic-analyzer" class="wiki-link">Logic analyzer</a> and <a href="#wiki/sigrok" data-wiki="sigrok" class="wiki-link">sigrok</a>.</p>
+              <p id="logic-empty" class="hint"><span class="guide">No logic captures on this board yet. Record one with PulseView or <code>sigrok-cli</code> and import the .sr file, or practise with <code>pcbv fake-capture</code>.</span><span class="terse">No logic captures.</span></p>
+              <div id="logic-body" hidden>
+                <p id="logic-info" class="hint"></p>
+                <div class="serial-bar">
+                  <button type="button" id="logic-zoom-out" aria-label="Zoom out">−</button>
+                  <button type="button" id="logic-zoom-fit">Fit</button>
+                  <button type="button" id="logic-zoom-in" aria-label="Zoom in">+</button>
+                  <span id="logic-window" class="zoom"></span>
+                </div>
+                <div class="logic-wave"><canvas id="logic-canvas" aria-label="Waveforms; scroll to zoom, drag to move"></canvas></div>
+                <div class="serial-bar">
+                  <label class="field-inline">Channel <select id="logic-channel"></select></label>
+                  <select id="logic-baud" aria-label="Speed"></select>
+                  <button type="button" id="logic-decode" class="primary">Decode UART</button>
+                </div>
+                <div id="logic-text" class="serial-output logic-text" role="log" tabindex="0" aria-label="Decoded text"></div>
+                <div class="serial-bar" id="logic-compare-bar">
+                  <select id="logic-compare-with" aria-label="Console capture to compare with"></select>
+                  <button type="button" id="logic-compare">Compare</button>
+                </div>
+                <p id="logic-compare-result" class="hint" role="status"></p>
+                <button type="button" id="logic-ask" data-ai><span class="guide">Ask the assistant about this capture</span><span class="terse">Ask</span></button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-assistant" data-panel="assistant" data-ai>
+          <div class="card panel-card">
+            <div id="tab-assistant" class="assistant-tab">
+              <div class="serial-bar">
+                <div id="assistant-profile" class="segmented" role="radiogroup" aria-label="Model profile"></div>
+                <button type="button" id="assistant-reset">New chat</button>
+              </div>
+              <p id="assistant-unset" class="hint" hidden></p>
+              <p id="assistant-warnings" class="hint" role="status" hidden></p>
+              <p id="assistant-status" class="hint" role="status"></p>
+              <p class="hint guide explainer">The assistant reads the board and suggests; nothing changes until you approve it, and its guesses stay marked until you measure. See <a href="#wiki/method-and-ethics" data-wiki="method-and-ethics" class="wiki-link">Method and ethics</a>.</p>
+              <div id="assistant-log" class="assistant-log" role="log" aria-live="polite" tabindex="0"></div>
+              <p id="assistant-empty" class="hint"><span class="guide">No conversation yet. Ask about the board, a capture or a step below.</span><span class="terse">No messages.</span></p>
+              <div id="assistant-proposals" class="assistant-proposals"></div>
+              <p id="assistant-usage" class="hint"></p>
+              <form id="assistant-form" class="assistant-form">
+                <textarea id="assistant-input" rows="3" aria-label="Ask the assistant" placeholder="Ask about this board, a capture or a step. It can read the board and suggest a command, but you decide what runs."></textarea>
+                <button type="submit" id="assistant-send" class="primary">Ask</button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-terminal" data-panel="terminal">
+          <div class="card panel-card">
+            <div id="tab-terminal" class="terminal-tab">
+              <div class="serial-bar">
+                <button type="button" id="terminal-start" class="primary">Start session</button>
+                <button type="button" id="terminal-stop">End session</button>
+                <p id="terminal-status" class="hint" role="status">No session. Start one to get a shell in the board folder.</p>
+              </div>
+              <p class="hint guide explainer">A shell on this computer, in the board folder. Commands here do not reach the board; the Console does. See <a href="#wiki/serial-terminals" data-wiki="serial-terminals" class="wiki-link">Serial terminals</a>.</p>
+              <div id="terminal-screen" class="terminal-screen" aria-label="Terminal"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <aside id="tutorial-panel" class="tutorial" aria-labelledby="tutorial-title" hidden>
+      <header class="tutorial-head">
+        <h2 id="tutorial-title">Find the UART</h2>
+        <ol id="tutorial-chapters" class="tutorial-chapters" aria-label="Chapters"></ol>
+        <p id="tutorial-position" class="hint"></p>
+      </header>
+      <div id="tutorial-scroll" class="tutorial-scroll">
+        <section id="tutorial-step" aria-labelledby="tutorial-step-title">
+          <h3 id="tutorial-step-title" tabindex="-1"></h3>
+          <div id="tutorial-text" class="tutorial-text"></div>
+          <div id="tutorial-task-box">
+            <h4>Your task</h4>
+            <ul id="tutorial-tasks" class="checks"></ul>
+          </div>
+          <p id="tutorial-hint" class="tutorial-hint" role="status" aria-live="polite"></p>
+          <p id="tutorial-note" class="hint" role="status" aria-live="polite"></p>
+          <fieldset id="tutorial-question" class="bench" hidden>
+            <legend id="tutorial-question-legend"></legend>
+            <div class="bench-row" id="tutorial-choices"></div>
+          </fieldset>
+          <section id="bench-vdev" class="bench" aria-labelledby="bench-vdev-title" hidden>
+            <h4 id="bench-vdev-title">Virtual board</h4>
+            <p class="hint">A simulated router with the same console as the real thing. It takes the place of the board and the adapter.</p>
+            <p id="tutorial-vdev-state" class="hint" role="status"></p>
+            <div class="bench-row">
+              <button type="button" id="tutorial-vdev-start">Start the virtual board</button>
+            </div>
+          </section>
+          <section id="bench-meter" class="bench" aria-labelledby="bench-meter-title" hidden>
+            <h4 id="bench-meter-title">Multimeter</h4>
+            <p class="hint">The black probe is on the metal shell of the power jack, which is ground. The red probe goes on the pin you choose.</p>
+            <div class="bench-row" role="group" aria-label="Meter mode">
+              <button type="button" id="bench-mode-continuity" aria-pressed="false">Continuity</button>
+              <button type="button" id="bench-mode-dc" aria-pressed="false">DC volts</button>
+            </div>
+            <output id="bench-reading" class="meter-screen" for="bench-pin-1 bench-pin-2 bench-pin-3 bench-pin-4"></output>
+            <div class="bench-row" role="group" aria-label="Red probe">
+              <button type="button" id="bench-pin-1" aria-pressed="false">Pin 1</button>
+              <button type="button" id="bench-pin-2" aria-pressed="false">Pin 2</button>
+              <button type="button" id="bench-pin-3" aria-pressed="false">Pin 3</button>
+              <button type="button" id="bench-pin-4" aria-pressed="false">Pin 4</button>
+            </div>
+            <p id="bench-power-state" class="hint"></p>
+            <div class="bench-row">
+              <button type="button" id="bench-power">Plug in the board</button>
+              <button type="button" id="bench-cycle">Power cycle</button>
+              <button type="button" id="bench-record">Record reading</button>
+            </div>
+            <p id="bench-announce" class="visually-hidden" role="status" aria-live="polite"></p>
+          </section>
+          <section id="bench-wiring" class="bench" aria-labelledby="bench-wiring-title" hidden>
+            <h4 id="bench-wiring-title">Adapter wiring</h4>
+            <svg id="bench-figure" class="wire-figure" viewBox="0 0 300 150" role="img" aria-label="The adapter's four terminals and J4's four pins, with the wires you chose"></svg>
+            <div id="bench-wires" class="wire-rows">
+              <label for="wire-VCC">Adapter VCC goes to</label><select id="wire-VCC"></select>
+              <label for="wire-TXD">Adapter TXD goes to</label><select id="wire-TXD"></select>
+              <label for="wire-RXD">Adapter RXD goes to</label><select id="wire-RXD"></select>
+              <label for="wire-GND">Adapter GND goes to</label><select id="wire-GND"></select>
+            </div>
+          </section>
+          <details id="tutorial-example" class="tutorial-why" data-ai>
+            <summary>Ask the assistant (example)</summary>
+            <p class="hint">Example only. In the tutorial no question is sent to a model.</p>
+            <div class="example-msg user"><div class="who">You</div><p id="tutorial-example-question"></p></div>
+            <div class="example-msg assistant"><div class="who">Assistant</div><p id="tutorial-example-answer"></p></div>
+          </details>
+          <details id="tutorial-why" class="tutorial-why">
+            <summary>Why this step</summary>
+            <div id="tutorial-why-text"></div>
+            <p><a id="tutorial-why-link" href="#wiki" class="wiki-link">Read more in the wiki</a></p>
+          </details>
+        </section>
+        <section id="tutorial-finish" aria-labelledby="tutorial-finish-title" hidden>
+          <h3 id="tutorial-finish-title" tabindex="-1"></h3>
+          <p id="tutorial-finish-lead"></p>
+          <ul id="tutorial-finish-list" class="checks"></ul>
+          <p id="tutorial-finish-where" class="hint"></p>
+          <div class="step-actions">
+            <button type="button" id="tutorial-finish-create" class="primary">Create my first board</button>
+            <button type="button" id="tutorial-finish-needs">What you need</button>
+            <button type="button" id="tutorial-finish-live">Your first live board</button>
+          </div>
+        </section>
+      </div>
+      <div id="tutorial-leave-ask" class="tutorial-leave" role="group" aria-labelledby="tutorial-leave-text" hidden>
+        <p id="tutorial-leave-text"></p>
+        <div class="step-actions">
+          <button type="button" id="tutorial-leave-yes">Leave</button>
+          <button type="button" id="tutorial-leave-no" class="primary">Stay</button>
+        </div>
+      </div>
+      <footer class="tutorial-foot">
+        <button type="button" id="tutorial-back">Back</button>
+        <button type="button" id="tutorial-continue" class="primary" disabled>Continue</button>
+      </footer>
+    </aside>
+  </main>
+  <dialog id="settings-dialog" class="settings" aria-labelledby="settings-title">
+    <div class="settings-head">
+      <h2 id="settings-title">Settings</h2>
+      <button type="button" id="settings-close">Close</button>
+    </div>
+    <p id="settings-message" class="hint settings-message" role="alert"></p>
+
+    <section class="settings-section" aria-labelledby="settings-general">
+      <h3 id="settings-general">General</h3>
+      <p class="hint guide explainer">Guided shows explanations and hints; Expert hides them. Safety questions before a destructive action stay in both. See <a href="#wiki/settings-and-privacy" data-wiki="settings-and-privacy" class="wiki-link">Settings and privacy</a>.</p>
+      <div class="row2">
+        <label>Guidance
+          <select id="settings-guidance">
+            <option value="guided">Guided</option>
+            <option value="expert">Expert</option>
+          </select>
+        </label>
+        <label>Theme
+          <select id="theme-select">
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+      </div>
+      <h4>Bench check</h4>
+      <ul id="settings-checks" class="bench-checks" aria-label="Bench check"></ul>
+      <div class="step-actions">
+        <button type="button" id="settings-checks-again">Check again</button>
+        <button type="button" id="settings-welcome">Show the welcome again</button>
+      </div>
+      <p id="settings-welcome-note" class="hint" role="status"></p>
+      <h4>Tutorial</h4>
+      <p id="settings-tutorial-status" class="hint" role="status"></p>
+      <div class="step-actions">
+        <button type="button" id="settings-tutorial-resume" class="primary" hidden>Resume the tutorial</button>
+        <button type="button" id="settings-tutorial-start">Start the tutorial</button>
+      </div>
+      <div id="settings-tutorial-confirm" role="group" aria-label="Start the tutorial again" hidden>
+        <p class="hint">Your practice board is cleared. Your own boards are not touched.</p>
+        <div class="step-actions">
+          <button type="button" id="settings-tutorial-confirm-yes" class="danger">Start again</button>
+          <button type="button" id="settings-tutorial-confirm-no">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="settings-section" aria-labelledby="settings-assistant-title">
+      <h3 id="settings-assistant-title">Assistant</h3>
+      <label class="check"><input id="settings-assistant" type="checkbox"> Use the bench assistant</label>
+      <p class="hint">Off by default. When on, the assistant sends your questions and the board data it reads to the model server you choose below. The board data is headers, readings, and console and capture text. Photos go only if you allow them for a profile. Nothing is sent while the assistant is off, and the rest of the app works the same.</p>
+      <p class="hint guide explainer">The assistant only suggests; you approve everything. See <a href="#wiki/settings-and-privacy" data-wiki="settings-and-privacy" class="wiki-link">Settings and privacy</a>.</p>
+      <div id="assistant-config" data-ai>
+        <label>Profile <select id="assistant-config-profile"></select></label>
+        <div id="assistant-guide" class="hint">
+          <div data-guide="cloud">
+            <p class="guide">A cloud profile needs an account and credit at OpenRouter. Create a key at <code>openrouter.ai/keys</code>. Paste it below. You pay per question, and the usage line under the Agent panel shows the cost. The suggested models read photos. Your questions and the board data they use go to that server. See <a href="#wiki/settings-and-privacy" data-wiki="settings-and-privacy" class="wiki-link">Settings and privacy</a>.</p>
+            <p class="terse">Get a key at <code>openrouter.ai/keys</code>. You pay per question. <a href="#wiki/assistant-setup" data-wiki="assistant-setup" class="wiki-link">Set up the assistant</a></p>
+          </div>
+          <div data-guide="local" hidden>
+            <p class="guide">A local model runs on this computer and needs no key or account. Install Ollama with <code>sudo pacman -S ollama</code>. Start it with <code>sudo systemctl enable --now ollama</code>. Then download a small model, for example <code>ollama pull llama3.2:3b</code>. Use the address <code>http://localhost:11434/v1</code> and that model name. To read photos, use a vision model. A small text model cannot read photos.</p>
+            <p class="terse">Ollama: <code>sudo pacman -S ollama</code>, <code>ollama pull llama3.2:3b</code>, address <code>http://localhost:11434/v1</code>. <a href="#wiki/assistant-setup" data-wiki="assistant-setup" class="wiki-link">Set up the assistant</a></p>
+          </div>
+          <div data-guide="remote">
+            <p class="guide">A model server on another machine, such as Ollama on a home server, must be reached through an SSH tunnel, because only <code>https://</code> addresses are allowed off this computer. In a terminal, run <code>ssh -N -L 11434:localhost:11434 &lt;host&gt;</code> and leave it open, then use the address <code>http://localhost:11434/v1</code>.</p>
+            <p class="terse">Another machine: <code>ssh -N -L 11434:localhost:11434 &lt;host&gt;</code>, address <code>http://localhost:11434/v1</code>.</p>
+          </div>
+        </div>
+        <form id="assistant-settings" class="assistant-settings">
+          <div id="assistant-name-field">
+            <label>Name <input id="assistant-name" type="text" maxlength="24" autocomplete="off"></label>
+            <p class="hint guide">Name it for what it is to you, for example Cheap and Expensive, or Fast and Careful. Both cloud slots work the same way.</p>
+          </div>
+          <label>Server address <input id="assistant-base" type="url" placeholder="https://openrouter.ai/api/v1" autocomplete="off"></label>
+          <label>Model <input id="assistant-model" type="text" autocomplete="off"></label>
+          <label>Key <input id="assistant-key" type="password" autocomplete="off" placeholder="stored in your system keyring"></label>
+          <label class="check"><input id="assistant-photos" type="checkbox"> Send photos to this model</label>
+          <label>Effort per question
+            <select id="assistant-budget">
+              <option value="normal">Normal (up to 8 steps)</option>
+              <option value="deep">Deep (up to 24 steps, longer answers)</option>
+            </select>
+          </label>
+          <p class="hint guide">Deep lets the assistant look at more of the board before it answers. On a paid server one question can cost several times as much; the usage line shows what it cost.</p>
+          <div class="row2">
+            <label>Input price <input id="assistant-price-in" type="number" min="0" step="any"></label>
+            <label>Output price <input id="assistant-price-out" type="number" min="0" step="any"></label>
+          </div>
+          <p class="hint">Prices are in dollars per million tokens.</p>
+          <p id="assistant-key-state" class="hint"></p>
+          <div class="step-actions">
+            <button type="submit" class="primary">Save</button>
+            <button type="button" id="assistant-test"><span class="guide">Test this profile</span><span class="terse">Test</span></button>
+            <button type="button" id="assistant-key-clear">Remove key</button>
+          </div>
+          <p class="hint guide">Test sends one short question to the saved settings of this profile. The question is "Reply with the word ok." It sends no board data. Test also checks that the model can use the assistant's tools. It may cost a fraction of a cent. If you changed something, save first.</p>
+          <p id="assistant-test-result" class="hint" role="status"></p>
+        </form>
+      </div>
+    </section>
+
+    <section class="settings-section" aria-labelledby="settings-git-title">
+      <h3 id="settings-git-title">Git</h3>
+      <label class="check"><input id="settings-git" type="checkbox"> Keep the data folder in git</label>
+      <p class="hint">Off by default. Boards are plain folders either way. When on, the data folder is a git repository with a commit guard that scans for secrets, and <code>pcbv sync</code> commits changes. Nothing leaves this computer unless you set a remote address; then sync pushes the commits there.</p>
+      <p class="hint guide explainer">Work through the steps in order; each shows its result before the next. Git turns on only when the local checks pass. See <a href="#wiki/settings-and-privacy" data-wiki="settings-and-privacy" class="wiki-link">Settings and privacy</a>.</p>
+      <p id="git-message" class="hint" role="status"></p>
+      <ol class="git-steps">
+        <li>
+          <div class="git-step"><button type="button" id="git-step-check">1. Check tools</button><span class="hint">git and gitleaks are installed</span></div>
+          <p id="git-result-check" class="git-result" role="status"></p>
+        </li>
+        <li>
+          <div class="git-step"><button type="button" id="git-step-init">2. Prepare the folder</button><span class="hint">repository, commit guard, ignore rules</span></div>
+          <p id="git-result-init" class="git-result" role="status"></p>
+        </li>
+        <li>
+          <div class="git-step"><button type="button" id="git-step-ignore">3. Check photo originals</button><span class="hint">they carry location data and stay out of git</span></div>
+          <p id="git-result-ignore" class="git-result" role="status"></p>
+        </li>
+        <li>
+          <div class="git-guide guide">
+            <p class="hint">To back up to GitHub, first create a new, empty, <strong>private</strong> repository at <a data-external="https://github.com/new">github.com/new</a>. Leave "Add a README file" off. A public repository would publish every board, capture and note.</p>
+            <p class="hint">Then log in, one of two ways. Recommended, the GitHub CLI: run <code>sudo pacman -S github-cli</code>, then <code>gh auth login</code>. Choose GitHub.com, HTTPS, "Login with a web browser", and answer yes to "Authenticate Git with your GitHub credentials". Use the address <code>https://github.com/&lt;owner&gt;/&lt;repo&gt;.git</code>.</p>
+            <p class="hint">Or use an SSH key. Run <code>ssh-keygen -t ed25519</code>. Add the public key on GitHub. Check it with <code>ssh -T git@github.com</code>. Use the address <code>git@github.com:&lt;owner&gt;/&lt;repo&gt;.git</code>. The steps are on the <a href="#wiki/github-backup" data-wiki="github-backup" class="wiki-link">Back up to GitHub</a> page.</p>
+          </div>
+          <p class="git-guide terse hint">Create an empty private repository at <a data-external="https://github.com/new">github.com/new</a>. Then log in with <code>gh auth login</code> or an SSH key. <a href="#wiki/github-backup" data-wiki="github-backup" class="wiki-link">Back up to GitHub</a></p>
+          <p id="git-remote-note" class="hint">For a github.com address this step asks GitHub whether the repository is public, without logging in, and refuses a public one. Then it checks that git can read the repository.</p>
+          <div class="git-step"><label class="git-remote">Remote address (optional)
+            <input id="git-remote-url" type="text" maxlength="2048" spellcheck="false" autocomplete="off" placeholder="git@host:owner/repo.git or https://host/owner/repo.git"></label>
+            <button type="button" id="git-step-remote">4. Set remote</button></div>
+          <p id="git-result-remote" class="git-result" role="status"></p>
+          <div id="git-replace" class="step-actions" hidden>
+            <button type="button" id="git-replace-yes" class="primary">Replace the address</button>
+            <button type="button" id="git-replace-no">Keep it</button>
+          </div>
+        </li>
+        <li>
+          <div class="git-step"><button type="button" id="git-step-sync">5. <span data-git-off-only>Test sync</span><span data-git-only>Sync now</span></button><span class="hint">commit through the guard<span id="git-push-note"></span></span></div>
+          <p id="git-result-sync" class="git-result" role="status"></p>
+        </li>
+      </ol>
+      <dl id="git-status" class="git-status"></dl>
+    </section>
+  </dialog>
+</body>
+</html>

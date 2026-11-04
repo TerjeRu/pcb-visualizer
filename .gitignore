@@ -1,0 +1,24 @@
+node_modules/
+.DS_Store
+*.tmp
+.pcbv-*
+.theme-snapshot.txt
+
+.venv/
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+.env
+coverage/
+*.kwinrule
+virtual-boot.sr
+
+# Arch package build output
+packaging/arch/src/
+packaging/arch/pkg/
+packaging/arch/pcbv/
+packaging/arch/*.pkg.tar.zst
+packaging/arch/*.log

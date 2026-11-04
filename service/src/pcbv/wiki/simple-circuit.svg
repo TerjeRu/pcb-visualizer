@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 270" width="560" height="270" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="14" fill="#1b1f24">
+  <rect width="560" height="270" fill="#ffffff"/>
+  <g stroke="#1b1f24" stroke-width="2" fill="none" stroke-linecap="round">
+    <path d="M110 131 V60 H440 V110"/>
+    <path d="M440 170 V220 H110 V149"/>
+    <path d="M86 131 H134"/>
+    <path d="M98 149 H122" stroke-width="4"/>
+    <rect x="430" y="110" width="20" height="60"/>
+    <path d="M275 220 V236 M261 236 H289 M266 242 H284 M271 248 H279"/>
+  </g>
+  <text x="66" y="128" text-anchor="end">+</text>
+  <text x="66" y="146" text-anchor="end" font-weight="600">3.3 V</text>
+  <text x="66" y="164" text-anchor="end" fill="#5b6470" font-size="12">supply</text>
+  <text x="464" y="136" font-weight="600">R1</text>
+  <text x="464" y="154">1 kΩ</text>
+  <g fill="#b45309" stroke="#b45309" stroke-width="2">
+    <path d="M250 60 H300" fill="none"/>
+    <path d="M300 54 L312 60 L300 66 Z"/>
+    <path d="M300 220 H250" fill="none"/>
+    <path d="M250 214 L238 220 L250 226 Z"/>
+  </g>
+  <text x="280" y="44" text-anchor="middle" fill="#b45309">current I = V / R = 3.3 V / 1 kΩ = 3.3 mA</text>
+  <text x="275" y="204" text-anchor="middle" fill="#b45309">the same current returns through ground</text>
+  <text x="294" y="250" fill="#5b6470" font-size="12">ground, 0 V</text>
+</svg>

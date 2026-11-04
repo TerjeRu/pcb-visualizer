@@ -1,0 +1,101 @@
+id: bootloader-recon
+version: 1
+title: Bootloader recon
+summary: Stop the bootloader before it starts the kernel. Look around, but only read.
+requires: [get-a-console]
+
+steps:
+  - id: interrupt
+    title: Stop autoboot
+    why: |
+      U-Boot waits a few seconds for a key before it starts the kernel. If you press a key in that
+      time, U-Boot shows its command prompt. There you can read the settings that decide how the
+      board boots. Stopping here changes nothing on the board.
+    do: |
+      1. Connect the console at the speed you found.
+      2. Power-cycle the board.
+      3. When **Hit any key to stop autoboot** appears, click **Any key**. The button pulses during the countdown.
+      4. If nothing happens, the board may use a short countdown or a specific key. A few boards need a word, such as `tpl`.
+      5. Check for a prompt such as `=>` or `ARC7621 #`.
+    gates:
+      - id: read-only
+        text: I will only read in this playbook. I will not run commands that write, such as saveenv, erase, sf write and nand write.
+    checks:
+      - kind: capture
+        seen: [autoboot, uboot-prompt]
+        text: A session saw the countdown and a U-Boot prompt.
+    done_when: You are at the U-Boot prompt.
+    wiki: [u-boot]
+
+  - id: printenv
+    title: Read the environment
+    why: |
+      The environment holds the boot settings. `bootcmd` is the command that boots the kernel.
+      `bootargs` is what U-Boot tells the kernel, including the console speed and the root
+      filesystem. `bootdelay` is the length of the countdown.
+    do: |
+      1. Type `printenv` and press Enter.
+      2. Read `bootcmd`, `bootargs` and `bootdelay`. Copy them below.
+      3. Look for addresses like `0x9c050000` and for partition names. Also look for `ipaddr` or `serverip`, which point to network recovery.
+    checks:
+      - kind: capture
+        seen: [env]
+        text: printenv output was captured.
+    ask:
+      - id: bootcmd
+        label: bootcmd
+        placeholder: "bootm 0x9c050000"
+      - id: bootargs
+        label: bootargs
+        placeholder: "console=ttyS0,115200 root=/dev/mtdblock5"
+        required: false
+      - id: bootdelay
+        label: bootdelay
+        placeholder: "3"
+        required: false
+    done_when: The boot command and arguments are written down.
+    wiki: [u-boot]
+
+  - id: help
+    title: See which commands exist
+    why: |
+      Every vendor builds U-Boot with different commands. The list shows what is possible later:
+      reading flash (`sf read`, `nand read`), dumping memory (`md`) and loading over the network
+      (`tftpboot`). In this step you only look.
+    do: |
+      1. Type `help` and press Enter.
+      2. Read the list. Later you can try the commands that only read: `version`, `bdinfo`, `md` and `sf probe`.
+      3. Write down the commands that can help with a backup, such as `sf`, `nand`, `md` or `tftpboot`.
+
+      The console refuses a writing command like `saveenv` or `sf erase` until you type it a second time. Do not type it in this playbook.
+    checks:
+      - kind: capture
+        seen: [help]
+        text: help output was captured.
+    ask:
+      - id: interesting
+        label: Commands of interest
+        placeholder: "sf, md, tftpboot"
+        required: false
+    done_when: You know which commands this bootloader offers.
+    wiki: [u-boot]
+
+  - id: continue
+    title: Let it boot normally
+    why: |
+      You leave the board as you found it. You saved nothing, so the next power cycle boots as
+      before.
+    do: |
+      1. Type `boot` and press Enter, or power-cycle the board.
+      2. Wait until the board boots to the usual prompt.
+      3. Disconnect the console. The whole session is in the Timeline.
+    gates:
+      - id: nothing-written
+        text: I did not run saveenv, env save or any erase or write command.
+    checks:
+      - kind: capture
+        seen: [kernel]
+        seen_any: [login, shell]
+        text: The board booted to a prompt in a captured session.
+    done_when: The board boots normally and the recon is captured.
+    wiki: [u-boot]

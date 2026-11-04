@@ -1,0 +1,107 @@
+id: logic-capture
+version: 1
+title: Capture the UART with a logic analyzer
+summary: Record the TX line of the board with a logic analyzer. Decode it and compare it with the console.
+requires: [get-a-console]
+
+steps:
+  - id: probe
+    title: Connect the analyzer, listening only
+    why: |
+      A logic analyzer only listens. It shows the exact signal on the TX pin. If the console shows
+      garbage, the signal shows whether the wiring, the speed or the voltage is wrong. The
+      analyzer inputs do not drive the pin, so the analyzer cannot disturb the board like a wrong
+      adapter can. Attach it with the board unplugged, and leave the VCC pin unconnected.
+    do: |
+      1. Unplug the board. Clip the analyzer ground lead to the pin that you marked GND.
+      2. Clip channel 0 to the TX pin. If the analyzer has a spare channel, clip channel 1 to RX.
+      3. Leave the VCC pin unconnected.
+      4. Check that the input range of your analyzer covers the logic level that you measured. Most routers use 3.3 V.
+    gates:
+      - id: unplugged
+        text: The board is unplugged while I attach the probes.
+      - id: no-vcc
+        text: Nothing from the analyzer or its cable touches the VCC pin.
+      - id: level
+        text: The analyzer's input range covers the board's logic level.
+    checks:
+      - kind: uart_header
+        text: A header with GND, TX and RX is marked.
+    ask:
+      - id: channel
+        label: Analyzer channel on TX
+        placeholder: "D0"
+        required: false
+    done_when: The analyzer is attached to ground and TX.
+    wiki: [logic-analyzer, logic-levels]
+
+  - id: capture
+    title: Capture a boot
+    why: |
+      The board sends its boot output at one fixed speed, so a capture of a few seconds holds the
+      whole banner. The analyzer must sample much faster than the bits arrive. Use at least eight
+      samples per bit. At that rate, 1 MHz covers 115200 baud.
+    do: |
+      1. In PulseView or `sigrok-cli`, set the sample rate to 1 MHz or higher. Set the length to 10 to 20 seconds.
+      2. Start the capture. Then power on the board.
+      3. When the output has stopped, stop the capture. Save it as a `.sr` file. A CSV export also works.
+      4. Open the **Logic** panel and import the file.
+      5. To practise without hardware, run `pcbv fake-capture -o boot.sr` and import that file. If `pcbv` is not on your PATH, run `uv run pcbv fake-capture -o boot.sr` in the service folder.
+    checks:
+      - kind: logic
+        text: A logic capture is imported.
+    ask:
+      - id: samplerate
+        label: Sample rate used
+        placeholder: "1 MHz"
+        required: false
+    done_when: The capture is in the Logic panel.
+    wiki: [logic-analyzer]
+
+  - id: decode
+    title: Decode the UART
+    why: |
+      The decoder turns the pulses into text. It reads the bit width from the shortest pulses.
+      Readable boot output confirms that TX carries a console at that speed. Garbage means a
+      different speed or channel. The error count is the number of bytes that did not fit 8N1
+      framing.
+    do: |
+      1. Select the capture in the Logic panel and choose the channel on TX.
+      2. Press **Decode**. If you leave the speed empty, the app estimates it.
+      3. Read the preview. A bootloader banner and kernel messages show that the decode worked.
+      4. If you see garbage, try the common speeds in turn: 9600, 19200, 38400, 57600 and 115200.
+    checks:
+      - kind: logic
+        decoded: true
+        seen_any: [bootloader, kernel]
+        text: A channel decoded into readable boot output.
+    ask:
+      - id: baud
+        label: Decoded speed
+        placeholder: "115200"
+    done_when: Readable boot text appears at a speed you can name.
+    wiki: [logic-analyzer, reading-boot-logs, uart]
+
+  - id: compare
+    title: Compare with the console
+    why: |
+      The analyzer and the console are two independent views of the same boot. If the text
+      matches, the wiring, speed and voltage are right. If the analyzer shows clean text and the
+      console shows garbage, check the adapter: its level setting, its speed and its RX and TX
+      wires. The first difference in the comparison shows where to look.
+    do: |
+      1. Record a console session and an analyzer capture of the same power-on. Start both before you apply power.
+      2. In the Logic panel, choose that console session under **Compare**. Then press the button.
+      3. Read the percentage and the first difference.
+    checks:
+      - kind: logic
+        compared: true
+        min_ratio: 0.9
+        text: The decoded text matches a console capture by at least 90 percent.
+    ask:
+      - id: difference
+        label: First difference, if any
+        placeholder: "none"
+        required: false
+    done_when: The decoded text and the console agree.
+    wiki: [logic-analyzer]

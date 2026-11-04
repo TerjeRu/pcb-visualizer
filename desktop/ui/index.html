@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PCB Visualizer</title>
+  <link rel="stylesheet" href="splash.css">
+  <script src="splash.js" defer></script>
+</head>
+<body>
+  <main>
+    <p id="starting">Starting the pcbv service…<br>If this stays here, run <code>pcbv serve</code> in a terminal and look for errors.</p>
+    <section id="failed" hidden>
+      <h1 id="reason"></h1>
+      <pre id="detail" hidden></pre>
+      <p id="command"></p>
+      <button type="button" id="retry">Retry</button>
+    </section>
+  </main>
+</body>
+</html>

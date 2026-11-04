@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 300" width="580" height="300" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="14" fill="#1b1f24">
+  <rect width="580" height="300" fill="#ffffff"/>
+  <g stroke="#1b1f24" stroke-width="2" fill="none" stroke-linecap="round">
+    <path d="M150 40 H190 M170 40 V70"/>
+    <rect x="160" y="70" width="20" height="60"/>
+    <path d="M170 130 V160 H360"/>
+    <path d="M170 160 V190"/>
+    <path d="M170 190 L196 222"/>
+    <path d="M170 228 V258 M156 258 H184 M161 264 H179 M166 270 H174"/>
+    <rect x="360" y="130" width="120" height="60"/>
+  </g>
+  <circle cx="170" cy="160" r="4" fill="#1b1f24"/>
+  <circle cx="170" cy="190" r="3" fill="#ffffff" stroke="#1b1f24" stroke-width="2"/>
+  <circle cx="170" cy="228" r="3" fill="#ffffff" stroke="#1b1f24" stroke-width="2"/>
+  <text x="200" y="45" font-weight="600">3V3</text>
+  <text x="190" y="96" font-weight="600">R1</text>
+  <text x="190" y="114">10 kΩ pull-up</text>
+  <text x="206" y="214">SW1, or a chip driving the line low</text>
+  <text x="420" y="157" text-anchor="middle" font-weight="600">U1</text>
+  <text x="420" y="175" text-anchor="middle">input</text>
+  <text x="250" y="152" fill="#5b6470" font-size="12">signal</text>
+  <text x="300" y="232" fill="#b45309">open: input reads 3.3 V (high)</text>
+  <text x="300" y="252" fill="#b45309">closed: input reads 0 V (low),</text>
+  <text x="300" y="270" fill="#b45309">0.33 mA flows through R1</text>
+</svg>

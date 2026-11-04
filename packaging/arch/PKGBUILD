@@ -1,0 +1,90 @@
+# Maintainer: Terje Rutgersen <support@lethio.com>
+#
+# Private build from this repository through git:
+#   PCBV_REF=branch=<branch> makepkg -f     before the release is tagged
+#   makepkg -si                             from the tag v0.1.0 on
+pkgname=pcbv
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Local workbench for documenting the debug interfaces of hardware you own'
+arch=('x86_64')
+url='https://github.com/TerjeRu/pcb-visualizer'
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3' 'xdg-utils')
+makedepends=('git' 'uv' 'rust' 'cargo' 'nodejs' 'npm')
+optdepends=('git: board history and sync'
+            'gitleaks: secret scan before each commit'
+            'tio: serial terminal'
+            'picocom: serial terminal'
+            'sigrok-cli: recording logic captures'
+            'pulseview: recording logic captures'
+            'sigrok-firmware-fx2lafw: firmware for FX2 logic analyzers')
+options=('!strip' '!debug')
+source=("pcbv::git+file://$(realpath "$startdir/../..")#${PCBV_REF:-tag=v$pkgver}"
+        'pcbv.sh'
+        'pcbv.desktop')
+sha256sums=('SKIP'
+            'SKIP'
+            'SKIP')
+
+build() {
+  cd "$srcdir/pcbv"
+
+  # The service: the wheel and the locked, hashed dependencies, in a standalone CPython of its own.
+  (
+    cd service
+    uv build --wheel --out-dir "$srcdir/wheel"
+    uv export --frozen --no-dev --no-emit-project --format requirements-txt > "$srcdir/requirements.txt"
+  )
+  uv python install 3.12 --no-bin --install-dir "$srcdir/pyroot"
+  local python=("$srcdir"/pyroot/cpython-3.12.*-linux-$CARCH-gnu)
+  python="${python[0]}"
+  [[ -x $python/bin/python3 ]] || { echo "no standalone Python found in $srcdir/pyroot" >&2; return 1; }
+  uv pip install --python "$python/bin/python3" --break-system-packages --no-compile \
+    --require-hashes -r "$srcdir/requirements.txt"
+  uv pip install --python "$python/bin/python3" --break-system-packages --no-compile \
+    --no-deps "$srcdir"/wheel/pcbv-*.whl
+  rm -rf "$srcdir/python"
+  mv "$python" "$srcdir/python"
+
+  # The desktop shell, as a release build (it finds pcbv on PATH and no checkout).
+  npm ci --ignore-scripts
+  export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$srcdir=/build --remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo --remap-path-prefix=${RUSTUP_HOME:-$HOME/.rustup}=/rustup"
+  (cd desktop && ../node_modules/.bin/tauri build --no-bundle)
+}
+
+package() {
+  cd "$srcdir/pcbv"
+
+  # Python: copy, then remove what carries the build path (scripts with a build-path first line,
+  # the local wheel's install record) and compile with the install path in the byte code.
+  install -d "$pkgdir/opt/pcbv"
+  cp -a "$srcdir/python" "$pkgdir/opt/pcbv/python"
+  local py="$pkgdir/opt/pcbv/python"
+  find "$py/bin" -type f ! -name 'python*' -exec grep -lI "$srcdir" {} + | xargs -r rm -f
+  find "$py" -name direct_url.json -delete
+  # The Tk GUI toolkit: the service has no use for it, and its libraries search /tools/deps/lib.
+  rm -rf "$py"/lib/{tcl9,tcl9.0,tk9.0,itcl*,thread[0-9]*} "$py"/lib/lib{tcl,tk}* \
+    "$py"/lib/python3.12/{tkinter,idlelib,turtledemo,turtle.py} "$py"/lib/python3.12/lib-dynload/_tkinter.* \
+    "$py"/bin/idle3*
+  # uv writes the install folder into the build settings; point them at the final place.
+  grep -rIl --exclude-dir=__pycache__ "$srcdir/python" "$py" | xargs -r sed -i "s|$srcdir/python|/opt/pcbv/python|g"
+  grep -rIl --exclude-dir=__pycache__ "$srcdir/pyroot/cpython-3.12.[0-9]*-linux-$CARCH-gnu" "$py" | xargs -r sed -i "s|$srcdir/pyroot/cpython-3.12.[0-9]*-linux-$CARCH-gnu|/opt/pcbv/python|g"
+  find "$py" -name RECORD -path '*dist-info*' -exec sed -i '/direct_url\.json,/d' {} +
+  find "$py" -name __pycache__ -type d -prune -exec rm -rf {} +
+  "$py/bin/python3" -m compileall -q -f -d /opt/pcbv/python/lib/python3.12 "$py/lib/python3.12"
+
+  install -Dm755 "$srcdir/pcbv.sh" "$pkgdir/usr/bin/pcbv"
+
+  # The front end, without its tests.
+  install -d "$pkgdir/usr/share/pcbv"
+  cp -a app "$pkgdir/usr/share/pcbv/app"
+  rm -rf "$pkgdir/usr/share/pcbv/app/tests"
+
+  install -Dm755 desktop/src-tauri/target/release/pcbv-desktop "$pkgdir/usr/bin/pcbv-desktop"
+  install -Dm644 "$srcdir/pcbv.desktop" "$pkgdir/usr/share/applications/pcbv.desktop"
+  install -Dm644 desktop/src-tauri/icons/128x128.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/pcbv.png"
+
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/pcbv/LICENSE"
+  install -Dm644 THIRD_PARTY_LICENSES.md "$pkgdir/usr/share/licenses/pcbv/THIRD_PARTY_LICENSES.md"
+}

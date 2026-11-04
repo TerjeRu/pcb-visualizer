@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" width="720" height="300" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="14" fill="#1b1f24">
+  <rect width="720" height="300" fill="#ffffff"/>
+  <g stroke="#1b1f24" stroke-width="2" fill="none" stroke-linecap="round">
+    <rect x="70" y="70" width="150" height="180" rx="6"/>
+    <rect x="30" y="140" width="40" height="40"/>
+    <rect x="500" y="70" width="150" height="180" rx="6"/>
+  </g>
+  <text x="145" y="58" text-anchor="middle" font-weight="600">USB-UART adapter</text>
+  <text x="50" y="200" text-anchor="middle" fill="#5b6470" font-size="12">USB</text>
+  <text x="575" y="58" text-anchor="middle" font-weight="600">Board UART header</text>
+  <g font-family="JetBrains Mono, monospace" font-size="13">
+    <text x="205" y="105" text-anchor="end">GND</text><text x="205" y="145" text-anchor="end">RXD</text>
+    <text x="205" y="185" text-anchor="end">TXD</text><text x="205" y="225" text-anchor="end">VCC</text>
+    <text x="515" y="105">GND</text><text x="515" y="145">RX</text><text x="515" y="185">TX</text><text x="515" y="225">VCC</text>
+  </g>
+  <g fill="#ffffff" stroke="#1b1f24" stroke-width="2">
+    <circle cx="220" cy="100" r="5"/><circle cx="220" cy="140" r="5"/><circle cx="220" cy="180" r="5"/><circle cx="220" cy="220" r="5"/>
+    <circle cx="500" cy="100" r="5"/><circle cx="500" cy="140" r="5"/><circle cx="500" cy="180" r="5"/><circle cx="500" cy="220" r="5"/>
+  </g>
+  <path d="M225 100 H495" stroke="#1b1f24" stroke-width="3" fill="none"/>
+  <g stroke="#b45309" stroke-width="3" fill="none" stroke-linecap="round">
+    <path d="M495 180 C400 180 320 140 225 140"/>
+    <path d="M225 180 C320 180 400 140 495 140"/>
+  </g>
+  <g fill="#b45309">
+    <path d="M262 133 L248 140 L262 147 Z"/>
+    <path d="M458 133 L472 140 L458 147 Z"/>
+  </g>
+  <text x="360" y="92" text-anchor="middle">ground, always connected first</text>
+  <text x="300" y="128" text-anchor="middle" fill="#b45309" font-size="12">board sends</text>
+  <text x="420" y="128" text-anchor="middle" fill="#b45309" font-size="12">board receives</text>
+  <g stroke="#a3271b" stroke-width="2.5" stroke-linecap="round">
+    <path d="M236 212 L252 228 M252 212 L236 228"/>
+    <path d="M468 212 L484 228 M484 212 L468 228"/>
+  </g>
+  <text x="360" y="250" text-anchor="middle" fill="#a3271b">VCC: leave unconnected on both sides</text>
+  <text x="360" y="284" text-anchor="middle" fill="#5b6470" font-size="13">The data lines cross: each side's transmit pin goes to the other side's receive pin.</text>
+</svg>

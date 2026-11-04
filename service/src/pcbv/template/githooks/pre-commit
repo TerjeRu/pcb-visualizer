@@ -1,0 +1,40 @@
+#!/bin/sh
+# pcbv commit guard, installed by `pcbv repo init` (core.hooksPath = .githooks).
+# Blocks flash dumps, extracted firmware, the .pcbv cache and files over 5 MB, then
+# runs a gitleaks secret scan on what is staged. ISP routers leak Wi-Fi keys, PPPoE,
+# TR-069 and VoIP credentials into boot logs and configs; those must not reach GitHub.
+set -u
+max_bytes=5242880
+
+problems=$(git diff --cached --name-only --diff-filter=ACMR | while IFS= read -r path; do
+  case "/$path" in
+    */dumps/*|*/extracted/*|*/.pcbv/*)
+      echo "  $path: dumps/, extracted/ and .pcbv/ are never committed"
+      continue ;;
+  esac
+  size=$(git cat-file -s ":$path" 2>/dev/null || echo 0)
+  if [ "$size" -gt "$max_bytes" ]; then
+    echo "  $path: $size bytes, over the 5 MB limit"
+  fi
+done)
+
+if [ -n "$problems" ]; then
+  echo "pcbv commit guard: blocked" >&2
+  echo "$problems" >&2
+  echo "Unstage these (git restore --staged <path>) or add them to .gitignore." >&2
+  exit 1
+fi
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pcbv commit guard: gitleaks is not installed, so the secret scan cannot run." >&2
+  echo "Install it with: sudo pacman -S gitleaks" >&2
+  exit 1
+fi
+
+top=$(git rev-parse --show-toplevel)
+if ! gitleaks git --pre-commit --staged --redact --no-banner --log-level warn \
+     --config "$top/.gitleaks.toml" "$top"; then
+  echo "pcbv commit guard: possible secret in the staged changes (shown redacted above)." >&2
+  echo "Remove it, or if it is a false positive add the line's fingerprint to .gitleaksignore." >&2
+  exit 1
+fi

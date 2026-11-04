@@ -1,0 +1,118 @@
+id: get-a-console
+version: 1
+title: Get a console
+summary: Wire the USB-serial adapter to the UART you found. Find the speed and capture a full boot log.
+requires: [find-uart]
+
+steps:
+  - id: adapter
+    title: Check the adapter's logic level
+    why: |
+      The adapter's signal voltage must match the board's voltage, which you measured in Find the
+      UART. A 5 V signal can damage a 3.3 V board, and a 1.8 V board needs a 1.8 V adapter. If
+      you check this before you connect anything, nothing can go wrong while you wire.
+    do: |
+      1. Find the adapter's pin labels: GND, TXD, RXD and a supply pin (VCC, 3V3 or 5V).
+      2. Plug the adapter into the laptop. Measure TXD against GND. TXD idles at the adapter's signal level.
+      3. A CP2102 reads about 3.3 V whatever its 3V3 / 5V jumper says. On most CP2102 modules the jumper only selects the voltage of the VCC pin. On FT232 modules the jumper sets the signal level, so set it to 3V3 and measure again.
+      4. If the board is 1.8 V, stop here. You need a 1.8 V adapter or a level shifter.
+    gates:
+      - id: level
+        text: The adapter's TXD idles at the logic level I measured on the board's UART.
+    ask:
+      - id: adapter
+        label: Adapter and measured level
+        placeholder: "CP2102, TXD idles at 3.31 V"
+    done_when: The adapter's measured signal level matches the board's logic level.
+    wiki: [logic-levels, usb-uart-adapter]
+
+  - id: wire
+    title: Wire it up, with the board unplugged
+    why: |
+      The data lines cross over: what one side sends, the other side receives. Ground gives both
+      sides the same reference. Without ground the signal is noise. Leave VCC unconnected. The
+      board has its own power, and two supplies that fight each other can damage either one.
+    do: |
+      With the board unplugged and the adapter not yet in the laptop:
+
+      1. Adapter **GND** to the board's **GND** pin.
+      2. Adapter **RXD** to the board's **TX** pin.
+      3. Adapter **TXD** to the board's **RX** pin.
+      4. Leave adapter **VCC / 3V3 / 5V** unconnected. If the wire dangles, tape it.
+      5. Compare every wire with the pins marked in the Header panel.
+    gates:
+      - id: unplugged
+        text: The board is unplugged while I wire.
+      - id: no-vcc
+        text: The adapter's VCC pin is not connected to anything.
+      - id: crossed
+        text: Adapter RX goes to board TX, and adapter TX goes to board RX.
+    checks:
+      - kind: uart_header
+        text: The UART pins are marked from Find the UART.
+    done_when: Three wires connect GND, RX and TX, and VCC is free.
+    wiki: [uart]
+
+  - id: connect
+    title: Connect and find the speed
+    why: |
+      Almost every router talks at 115200 baud. A wrong speed gives garbage text, which is
+      harmless. Disconnect, choose another speed and power-cycle again. Clean text means that you
+      found the speed.
+    do: |
+      1. Plug the adapter into the laptop.
+      2. Open the **Console** tab. Choose the adapter (the list shows its USB port) and **115200 baud**. Then press **Connect**.
+      3. Plug in the power of the board and read the console.
+      4. If you see garbage, disconnect and try 57600. Then try 38400. Power-cycle the board each time.
+      5. If you see nothing, unplug everything. Check that RX and TX cross and that the ground wire is connected.
+
+      If **Connect** says permission denied, your user is not in the `uucp` group yet.
+    checks:
+      - kind: capture
+        seen_any: [bootloader, kernel]
+        text: The console recognised a bootloader or kernel message.
+    done_when: You read clean boot messages in the console.
+    wiki: [uart]
+
+  - id: boot-log
+    title: Capture a complete boot
+    why: |
+      A full boot log names the bootloader, the kernel, the flash layout and often the services
+      and passwords. The app saves every console session to the board folder, so it keeps this
+      log.
+    do: |
+      1. With the console connected, power-cycle the board.
+      2. Let the board boot completely. Do not press anything. Wait until the output stops or a login or shell prompt appears. Many routers print "Please press Enter to activate this console".
+      3. Leave the console open, or disconnect. The app has already saved the capture.
+    checks:
+      - kind: capture
+        seen: [bootloader, kernel]
+        seen_any: [login, shell]
+        text: One session saw the bootloader, the kernel and a login or shell prompt.
+    done_when: A session covers the whole boot, from bootloader banner to prompt.
+    wiki: [reading-boot-logs]
+
+  - id: read
+    title: Read the boot log
+    why: |
+      The log shows what you are dealing with before you type anything. Use the versions as
+      search terms. The flash partition table is the map for a later backup.
+    do: |
+      1. Open the **Timeline** tab. Click the console session to read its log.
+      2. Find the bootloader banner and its version, for example `U-Boot 2015.07`.
+      3. Find the kernel version in the `Linux version` line.
+      4. Find the flash partitions. They are lines like `0x000000000000-0x000000030000 : "u-boot"`.
+      5. If anything looks like a password or other secret, write it down and keep that note private.
+    ask:
+      - id: bootloader
+        label: Bootloader and version
+        placeholder: "U-Boot 2015.07"
+      - id: kernel
+        label: Kernel version
+        placeholder: "Linux 4.4.198"
+      - id: partitions
+        label: Flash partitions
+        placeholder: "u-boot, u-boot-env, factory, kernel, rootfs, rootfs_data"
+        required: false
+    done_when: You know the bootloader, the kernel and, ideally, the flash layout.
+    wiki: [reading-boot-logs, u-boot]

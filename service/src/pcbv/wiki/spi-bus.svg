@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 360" width="760" height="360" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="13" fill="#1b1f24">
+  <rect width="760" height="360" fill="#ffffff"/>
+  <rect x="40" y="60" width="150" height="250" fill="#eef0f3" stroke="#1b1f24" stroke-width="2"/>
+  <text x="115" y="50" text-anchor="middle" font-weight="600">Controller (SoC)</text>
+  <text x="182" y="104" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="12">SCLK</text>
+  <text x="182" y="134" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="12">MOSI</text>
+  <text x="182" y="164" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="12">MISO</text>
+  <text x="182" y="264" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="12">CS0#</text>
+  <text x="182" y="294" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="12">CS1#</text>
+  <path d="M190 100 H700 M190 130 H700 M190 160 H700" stroke="#1b1f24" stroke-width="2" fill="none"/>
+  <text x="706" y="104" font-family="JetBrains Mono, monospace" font-size="12" fill="#5b6470">SCLK</text>
+  <text x="706" y="134" font-family="JetBrains Mono, monospace" font-size="12" fill="#5b6470">MOSI</text>
+  <text x="706" y="164" font-family="JetBrains Mono, monospace" font-size="12" fill="#5b6470">MISO</text>
+  <rect x="330" y="200" width="130" height="80" fill="#eef0f3" stroke="#1b1f24" stroke-width="2"/>
+  <text x="395" y="268" text-anchor="middle" font-weight="600">U1 flash</text>
+  <path d="M350 100 V200" stroke="#1b1f24" stroke-width="2" fill="none"/><circle cx="350" cy="100" r="4" fill="#1b1f24"/>
+  <text x="350" y="218" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12">CLK</text>
+  <path d="M380 130 V200" stroke="#1b1f24" stroke-width="2" fill="none"/><circle cx="380" cy="130" r="4" fill="#1b1f24"/>
+  <text x="380" y="218" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12">DI</text>
+  <path d="M410 160 V200" stroke="#1b1f24" stroke-width="2" fill="none"/><circle cx="410" cy="160" r="4" fill="#1b1f24"/>
+  <text x="410" y="218" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12">DO</text>
+  <path d="M190 260 H310 V240 H330" stroke="#b45309" stroke-width="2" fill="none"/>
+  <text x="336" y="244" font-family="JetBrains Mono, monospace" font-size="12" fill="#b45309">CS#</text>
+  <rect x="530" y="200" width="130" height="80" fill="#eef0f3" stroke="#1b1f24" stroke-width="2"/>
+  <text x="595" y="268" text-anchor="middle" font-weight="600">U2 peripheral</text>
+  <path d="M550 100 V200" stroke="#1b1f24" stroke-width="2" fill="none"/><circle cx="550" cy="100" r="4" fill="#1b1f24"/>
+  <text x="550" y="218" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12">CLK</text>
+  <path d="M580 130 V200" stroke="#1b1f24" stroke-width="2" fill="none"/><circle cx="580" cy="130" r="4" fill="#1b1f24"/>
+  <text x="580" y="218" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12">DI</text>
+  <path d="M610 160 V200" stroke="#1b1f24" stroke-width="2" fill="none"/><circle cx="610" cy="160" r="4" fill="#1b1f24"/>
+  <text x="610" y="218" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12">DO</text>
+  <path d="M190 290 H510 V240 H530" stroke="#b45309" stroke-width="2" fill="none"/>
+  <text x="536" y="244" font-family="JetBrains Mono, monospace" font-size="12" fill="#b45309">CS#</text>
+  <text x="40" y="345" fill="#5b6470" font-size="12">Clock and data lines are shared; each peripheral has its own chip-select line, which is pulled low to address it.</text>
+</svg>

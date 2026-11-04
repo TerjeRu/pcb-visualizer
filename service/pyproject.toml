@@ -1,0 +1,57 @@
+[project]
+name = "pcbv"
+version = "0.1.0"
+description = "PCB Visualizer local service: event log, state, WebSocket sync and the pcbv CLI."
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    "fastapi>=0.115",
+    "keyring>=25",
+    "pillow>=11",
+    "pyserial>=3.5",
+    "pyyaml>=6",
+    "uvicorn>=0.32",
+    "websockets>=13",
+]
+
+[project.scripts]
+pcbv = "pcbv.cli:main"
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.16.0",
+    "pytest>=8",
+    "pytest-cov>=7.1.0",
+    "pytest-timeout>=2.4.0",
+    "ruff>=0.17.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pcbv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+timeout = 20
+
+[tool.ruff]
+line-length = 130
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "B", "UP", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101",  # pytest asserts
+    "S603",  # subprocess with list arguments in tests
+    "S607",  # git and node from PATH in tests
+    "S104",  # tests check that 0.0.0.0 is refused
+    "S105",  # fixed session tokens and fake secrets are the test data
+    "S108",  # /tmp as a path string, never written
+    "S310",  # urlopen against the test's own loopback server
+    "S314",  # parses SVG the code under test just wrote
+]

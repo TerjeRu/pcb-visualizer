@@ -1,0 +1,15 @@
+/* These mirror the screen tokens in app/css/app.css. */
+:root {
+  --scr-bg: #0a0c0a; --scr-fg: #9ad48f; --scr-hi: #d4f5c8; --negative: #f07a7a;
+  --mono: "JetBrainsMono Nerd Font", "JetBrains Mono", "Noto Sans Mono", ui-monospace, monospace;
+  --sans: "Noto Sans", system-ui, sans-serif;
+}
+html, body { height: 100%; margin: 0; background: var(--scr-bg); color: var(--scr-fg); font: 14px/1.5 var(--sans); }
+body { display: grid; place-items: center; }
+main { max-width: 40em; padding: 16px; text-align: center; }
+p { margin: 8px 0; }
+code, pre { font-family: var(--mono); }
+h1 { margin: 0 0 8px; font-size: 16px; color: var(--negative); }
+pre { max-height: 14em; overflow: auto; margin: 8px 0; padding: 8px; text-align: left; white-space: pre-wrap; word-break: break-word; color: var(--scr-hi); border: 1px solid var(--scr-fg); }
+button { margin-top: 8px; padding: 4px 16px; font: inherit; color: var(--scr-hi); background: var(--scr-bg); border: 1px solid var(--scr-fg); cursor: pointer; }
+button:hover, button:focus-visible { border-color: var(--scr-hi); }
