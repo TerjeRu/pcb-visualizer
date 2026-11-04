@@ -115,8 +115,10 @@ is typed into the console only after you choose Send to console.*
 
 ## Status
 
-Version 0.1.0, with one maintainer. PCB Visualizer is built on Arch Linux with KDE Plasma (Wayland) and runs
-on Linux. [ROADMAP.md](ROADMAP.md) lists the planned work.
+Version 0.1.0, with one maintainer. PCB Visualizer is built on Arch Linux with KDE Plasma (Wayland). The
+Arch package is the supported install. The app also runs from source on other Linux distributions, with
+the limits in [Other Linux distributions](#other-linux-distributions). [ROADMAP.md](ROADMAP.md) lists the
+planned work.
 
 The app and the service use protocol 2 together, so reload the app after an update. If the service stops
 during a change, see [service recovery](docs/SERVICE.md#durability-and-recovery) and
@@ -124,9 +126,11 @@ during a change, see [service recovery](docs/SERVICE.md#durability-and-recovery)
 
 ## What you need
 
-- **To try the app:** an Arch Linux machine (developed on KDE Plasma, Wayland) and the packages under
-  Install. The tutorial's practice board, the demo board (`pcbv demo`) and the virtual board (`pcbv vdev`) need no hardware.
-- **For a real board:** you need these items. Your user must be in the `uucp` group.
+- **To try the app:** a Linux machine. On Arch Linux, use the package under Install. On other
+  distributions, run it from source, as [Other Linux distributions](#other-linux-distributions) shows.
+  The tutorial's practice board, the demo board (`pcbv demo`) and the virtual board (`pcbv vdev`) need no hardware.
+- **For a real board:** you need these items. Your user must be in the group that owns serial ports:
+  `uucp` on Arch, `dialout` on Debian, Ubuntu and Fedora.
   - A multimeter for continuity, resistance and DC voltage.
   - A 3.3 V USB-UART adapter (CP2102, FT232R or CH340).
   - Female-to-female jumper wires.
@@ -135,7 +139,7 @@ during a change, see [service recovery](docs/SERVICE.md#durability-and-recovery)
 - **Optional:**
   - A logic analyzer, with sigrok and its FX2 firmware. The common 8-channel 24 MHz FX2 clones work.
   - A soldering kit, for header holes with no pins.
-  - `gitleaks`, for git backup.
+  - `gitleaks` 8.21 or newer, for git backup.
 
 The app's Welcome and Settings check the software and show the command for anything missing. The
 [What you need](service/src/pcbv/wiki/what-you-need.md) wiki page has the full list, with a page for each item.
@@ -270,6 +274,38 @@ If you have no hardware, press **Start the virtual board** in the Console panel.
 on a pseudo-terminal and lists it like a USB adapter. In a terminal, `pcbv vdev` does the same.
 `pcbv fake-capture -o boot.sr` writes a logic capture of the board booting.
 
+## Other Linux distributions
+
+The Arch package is the supported install. The service and the browser app also run from source on other
+distributions. They were tested in containers on Ubuntu 24.04, Debian 13 and Fedora 45.
+
+1. Install `git`, `curl` and Python 3 with your package manager.
+2. Install `uv`. Its [documentation](https://docs.astral.sh/uv/getting-started/installation/) lists the
+   ways to do this.
+3. Get the source and start the app:
+
+   ```sh
+   git clone https://github.com/TerjeRu/pcb-visualizer.git
+   cd pcb-visualizer/service
+   uv run pcbv demo                    # a ready-made demo board to explore
+   uv run pcbv serve                   # the service, on 127.0.0.1:8765
+   uv run pcbv open                    # in another terminal: the app in your browser
+   ```
+
+   The first `uv run` downloads Python 3.12 and the service's packages. The app does not need Node.js.
+
+Known limits outside Arch:
+
+- **Serial ports.** The group is `dialout`. Add yourself with `sudo usermod -aG dialout $USER`, then log out
+  and in. The app's bench check still asks for `uucp`. Ignore that line.
+- **Git backup.** The commit guard needs gitleaks 8.21 or newer. Debian 13 and Ubuntu 24.04 package 8.16,
+  and with that version the guard refuses every commit. Install a
+  [gitleaks release](https://github.com/gitleaks/gitleaks/releases) instead. Fedora's package works.
+- **Install hints.** The app and the wiki give `pacman` commands. Use your own package manager instead.
+- **Desktop app.** The Tauri shell was not tested outside Arch.
+- **Development.** The tests and the lint need Node.js 22 or newer. Ubuntu 24.04 and Debian 13 package older
+  versions.
+
 ## Tools you may need
 
 | Tool | What it is for | Install | Needed for |
@@ -278,7 +314,7 @@ on a pseudo-terminal and lists it like a USB adapter. In a terminal, `pcbv vdev`
 | tio or picocom | a second serial terminal, to check the Console against | `yay -S tio` or `sudo pacman -S picocom` | optional |
 | sigrok | making logic captures (the app reads them without it) | `sudo pacman -S sigrok-cli pulseview` | logic analyzers |
 | FX2 firmware | the firmware sigrok loads into FX2-based analyzers (the common 8-channel clones); unplug and replug the analyzer after installing | `sudo pacman -S sigrok-firmware-fx2lafw` | FX2-based logic analyzers |
-| the `uucp` group | access to USB serial adapters | `sudo usermod -aG uucp $USER`, then log out and in | real hardware |
+| the `uucp` group (`dialout` outside Arch) | access to USB serial adapters | `sudo usermod -aG uucp $USER`, then log out and in | real hardware |
 
 ## Command line
 
