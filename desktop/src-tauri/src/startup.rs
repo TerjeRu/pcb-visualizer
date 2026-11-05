@@ -418,9 +418,19 @@ mod tests {
         Scratch(dir)
     }
 
+    /// Writes a script that a test then runs. A child process writes the file, so this process never
+    /// holds it open for writing. When this process wrote it, another test thread could start a program
+    /// in that moment, the program got a copy of the open file, and running the script then failed with
+    /// "Text file busy".
     fn script(dir: &Path, name: &str, body: &str, mode: u32) -> PathBuf {
         let path = dir.join(name);
-        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        let written = Command::new("sh")
+            .args(["-c", "printf '%s' \"$1\" > \"$2\"", "sh"])
+            .arg(format!("#!/bin/sh\n{body}\n"))
+            .arg(&path)
+            .status()
+            .unwrap();
+        assert!(written.success());
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
         path
     }

@@ -1,6 +1,6 @@
 [package]
 name = "pcbv-desktop"
-version = "0.1.0"
+version = "0.1.1"
 description = "PCB Visualizer desktop shell: windows around the local pcbv service"
 edition = "2021"
 license = "MIT"

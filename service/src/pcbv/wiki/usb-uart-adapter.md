@@ -41,17 +41,17 @@ The port appears as `/dev/ttyUSB0`. The number increases with more adapters. Two
 
 ### Permission to open the port
 
-On Arch Linux, serial ports belong to the group `uucp`. Add yourself to the group once, then log out and back in:
+On Arch Linux, serial ports belong to the group `uucp`. On Debian, Ubuntu and Fedora, the group is `dialout`. The **Bench check** on the Welcome page names the group for your computer. Add yourself to the group once, then log out and back in:
 
 ```
 sudo usermod -aG uucp $USER
 ```
 
-The command `groups` lists your groups. Without `uucp`, opening the port fails with "Permission denied".
+On Debian, Ubuntu and Fedora, use `sudo usermod -aG dialout $USER`. The command `groups` lists your groups. Without the group, opening the port fails with "Permission denied".
 
 ## Talking to the board
 
-The Console panel opens the port, detects the speed and saves the session as a capture. Outside the app, a small terminal program does the same job. `tio` is in the AUR. `picocom` is in the official repositories:
+The Console panel opens the port, detects the speed and saves the session as a capture. Outside the app, a small terminal program does the same job. On Arch, `tio` is in the AUR and `picocom` is in the official repositories:
 
 ```
 yay -S tio
@@ -62,6 +62,8 @@ tio -b 115200 /dev/ttyUSB0
 sudo pacman -S picocom
 picocom -b 115200 /dev/ttyUSB0
 ```
+
+On Debian and Ubuntu, use `sudo apt install tio picocom`. On Fedora, use `sudo dnf install tio picocom`.
 
 Quit tio with `Ctrl-t q` and picocom with `Ctrl-a Ctrl-x`. Only one program can hold the port at a time.
 

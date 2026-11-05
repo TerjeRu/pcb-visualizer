@@ -2,11 +2,15 @@
 
 sigrok is an open-source software suite for logic analyzers, oscilloscopes and meters. It has two front ends: PulseView, a graphical application, and `sigrok-cli`, a command-line tool. The app's Logic panel reads sigrok's `.sr` capture files directly. You need sigrok only to make the capture.
 
-## Installing on Arch
+## Installing
+
+On Arch Linux:
 
 ```
 sudo pacman -S sigrok-cli pulseview sigrok-firmware-fx2lafw
 ```
+
+On Debian and Ubuntu, use `sudo apt install sigrok-cli pulseview sigrok-firmware-fx2lafw`. On Fedora, use `sudo dnf install sigrok-cli pulseview sigrok-firmware-fx2lafw`.
 
 `sigrok-firmware-fx2lafw` is the open firmware for analyzers built on the Cypress FX2 chip. This includes the common 8-channel 24 MHz clones. Each time you plug in the analyzer, sigrok loads the firmware into it. The analyzer then disconnects and reappears with a new USB identity. This is expected.
 

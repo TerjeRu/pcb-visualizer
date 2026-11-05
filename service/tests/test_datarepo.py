@@ -1,15 +1,16 @@
-import shutil
+import os
 import subprocess
+import time
 
 import pytest
 
-from pcbv import cli, datarepo, github, settings
+from pcbv import cli, datarepo, distro, github, settings
 from pcbv.board import Board
 from pcbv.datarepo import RepoError, commit_message, git, guard_problem, init_repo, run, sync
 
 import helpers as h
+from helpers import needs_gitleaks
 
-needs_gitleaks = pytest.mark.skipif(shutil.which("gitleaks") is None, reason="gitleaks not installed")
 
 
 @pytest.fixture(autouse=True)
@@ -48,8 +49,7 @@ def test_init_is_idempotent_and_keeps_edits(repo):
     git(repo, "config", "--unset", "core.hooksPath")
     assert init_repo(repo) == []
     assert (repo / ".gitignore").read_text() == "mine\n"
-    assert guard_problem(repo) in (None, "gitleaks is not installed, so the secret scan cannot run; "
-                                         "install it with: sudo pacman -S gitleaks")
+    assert guard_problem(repo) == datarepo.gitleaks_problem()
 
 
 def test_sync_refuses_without_the_guard(repo):
@@ -357,3 +357,117 @@ def test_pcbv_sync_with_a_public_origin_prints_the_reason_and_exits_1(repo, bare
     assert cli.main(["--root", str(repo / "boards"), "sync"]) == 1
     assert "Not pushed: origin is a public GitHub repository" in capsys.readouterr().err
     assert pushed(bare_origin) == []
+
+
+# --- the gitleaks probe and the commit guard's messages (spec 24) ---
+
+def fake_gitleaks(tmp_path, monkeypatch, body):
+    """A gitleaks first on PATH that logs each call to `calls` and then runs `body`."""
+    folder = tmp_path / "fakebin"
+    folder.mkdir(exist_ok=True)
+    script = folder / "gitleaks"
+    script.write_text(f'#!/bin/sh\necho "$@" >> "{tmp_path}/calls"\n{body}\n')
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{folder}{os.pathsep}{os.environ['PATH']}")
+    return script
+
+
+def calls(tmp_path):
+    path = tmp_path / "calls"
+    return path.read_text().splitlines() if path.exists() else []
+
+
+def test_a_gitleaks_that_runs_the_guard_command_is_ok(tmp_path, monkeypatch):
+    fake_gitleaks(tmp_path, monkeypatch, "exit 0")
+    assert datarepo.gitleaks_status() == "ok"
+    [args] = calls(tmp_path)
+    assert args.startswith("git --pre-commit --staged --redact --no-banner --log-level error --exit-code 3 /")
+
+
+def test_a_gitleaks_without_the_git_command_is_too_old(tmp_path, monkeypatch):
+    fake_gitleaks(tmp_path, monkeypatch, 'echo \'Error: unknown command "git" for "gitleaks"\' >&2\nexit 1')
+    assert datarepo.gitleaks_status() == "too-old"
+
+
+def test_a_gitleaks_that_hangs_is_too_old_within_the_deadline(tmp_path, monkeypatch):
+    fake_gitleaks(tmp_path, monkeypatch, "exec sleep 30")
+    monkeypatch.setattr(datarepo, "PROBE_DEADLINE", 1)
+    started = time.monotonic()
+    assert datarepo.gitleaks_status() == "too-old"
+    assert time.monotonic() - started < 5
+
+
+def test_no_gitleaks_is_missing_and_runs_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    assert datarepo.gitleaks_status() == "missing"
+
+
+def test_the_probe_runs_once_per_gitleaks_binary(tmp_path, monkeypatch):
+    script = fake_gitleaks(tmp_path, monkeypatch, "exit 0")
+    assert datarepo.gitleaks_status() == datarepo.gitleaks_status() == "ok"
+    assert len(calls(tmp_path)) == 1
+    stat = script.stat()
+    os.utime(script, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+    assert datarepo.gitleaks_status() == "ok"
+    assert len(calls(tmp_path)) == 2
+
+
+@pytest.mark.parametrize("failure", ["missing", "fails"])
+def test_a_git_init_that_fails_is_not_kept(tmp_path, monkeypatch, failure):
+    fake_gitleaks(tmp_path, monkeypatch, "exit 0")
+    real_run = datarepo.run
+
+    def broken_git(argv, **kwargs):
+        if argv[:2] == ["git", "init"]:
+            if failure == "missing":
+                raise FileNotFoundError("git")
+            return subprocess.CompletedProcess(argv, 128, "", "fatal")
+        return real_run(argv, **kwargs)
+
+    monkeypatch.setattr(datarepo, "run", broken_git)
+    assert datarepo.gitleaks_status() == "too-old"
+    assert calls(tmp_path) == []
+    monkeypatch.setattr(datarepo, "run", real_run)
+    assert datarepo.gitleaks_status() == "ok"
+
+
+@pytest.mark.parametrize("state, fam, words", [
+    ("missing", "arch", "gitleaks is not installed, so the secret scan cannot run; install it with: sudo pacman -S gitleaks"),
+    ("missing", None, "install it with your package manager"),
+    ("too-old", "fedora", "needs gitleaks 8.21 or newer; update it with: sudo dnf install gitleaks"),
+    ("too-old", "debian", "needs gitleaks 8.21 or newer; download gitleaks 8.21 or newer from https://github.com/gitleaks/gitleaks/releases"),
+    ("missing", "debian", "download gitleaks 8.21 or newer from https://github.com/gitleaks/gitleaks/releases"),
+])
+def test_the_guard_says_why_gitleaks_cannot_scan(repo, monkeypatch, state, fam, words):
+    monkeypatch.setattr(datarepo, "gitleaks_status", lambda: state)
+    monkeypatch.setattr(distro, "family", lambda: fam)
+    problem = guard_problem(repo)
+    assert words in problem and "apt" not in problem
+    with pytest.raises(RepoError, match="gitleaks"):
+        sync(repo, push=False)
+    assert log(repo) == []
+
+
+@pytest.mark.parametrize("body, said, not_said", [
+    ("exit 3", "possible secret in the staged changes", "could not run the scan"),
+    ('echo \'Error: unknown command "git" for "gitleaks"\' >&2\nexit 1',
+     "gitleaks could not run the scan. It needs gitleaks 8.21 or newer. Nothing was committed.", "possible secret"),
+])
+def test_the_hook_tells_a_found_secret_from_a_gitleaks_that_cannot_run(repo, tmp_path, monkeypatch, body, said, not_said):
+    fake_gitleaks(tmp_path, monkeypatch, body)
+    (repo / "wiki/note.md").write_text("note\n")
+    git(repo, "add", "-A")
+    result = run(["git", "-C", str(repo), "commit", "-qm", "note"], timeout=30)
+    assert result.returncode == 1
+    assert said in result.stderr and not_said not in result.stderr
+    assert "--exit-code 3" in calls(tmp_path)[-1]
+    assert log(repo) == []
+
+
+@pytest.mark.parametrize("state", ["missing", "too-old"])
+def test_guard_tests_skip_with_the_reason_locally_and_fail_in_ci(state):
+    with pytest.raises(pytest.skip.Exception, match=f"gitleaks 8.21 or newer, and gitleaks here is {state}"):
+        h.require_gitleaks(state, ci=False)
+    with pytest.raises(pytest.fail.Exception, match=f"gitleaks here is {state}"):
+        h.require_gitleaks(state, ci=True)
+    h.require_gitleaks("ok", ci=True)

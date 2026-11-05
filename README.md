@@ -115,7 +115,7 @@ is typed into the console only after you choose Send to console.*
 
 ## Status
 
-Version 0.1.0, with one maintainer. PCB Visualizer is built on Arch Linux with KDE Plasma (Wayland). The
+Version 0.1.1, with one maintainer. PCB Visualizer is built on Arch Linux with KDE Plasma (Wayland). The
 Arch package is the supported install. The app also runs from source on other Linux distributions, with
 the limits in [Other Linux distributions](#other-linux-distributions). [ROADMAP.md](ROADMAP.md) lists the
 planned work.
@@ -184,7 +184,7 @@ Remove the app with `sudo pacman -R pcbv`; your boards and settings stay.
 To install one version without adding the repository, install the file from the GitHub release:
 
 ```sh
-sudo pacman -U https://github.com/TerjeRu/pcb-visualizer/releases/download/v0.1.0/pcbv-0.1.0-1-x86_64.pkg.tar.zst
+sudo pacman -U https://github.com/TerjeRu/pcb-visualizer/releases/download/v0.1.1/pcbv-0.1.1-1-x86_64.pkg.tar.zst
 ```
 
 The release page gives the SHA-256 of the file. This way gets no automatic updates.
@@ -225,7 +225,7 @@ makepkg -si
 ```
 
 The build needs `git`, `uv`, `rust`, `nodejs` and `npm`, and the network. The package carries its own
-Python for the service (about 100 MB). It builds from the git tag `v0.1.0`; to build a branch, use
+Python for the service (about 100 MB). It builds from the git tag `v0.1.1`; to build a branch, use
 `PCBV_REF=branch=<name> makepkg -si`. To update to the latest code, run `git pull` in the checkout, then
 `PCBV_REF=branch=main makepkg -fsi` in `packaging/arch`; `-f` replaces the package file from the last
 build. Remove it with `sudo pacman -R pcbv`; your boards and settings are not touched. `.deb` and
@@ -268,7 +268,8 @@ in `service/`.
 
 `pcbv new "My Router"` creates a board of your own. Git is off until you turn it on in Settings
 (top bar), which guides you through it. `pcbv repo init` does the repository step from the
-command line, in `~/hw` by default. You need the repository for `pcbv sync`.
+command line, in `~/hw` by default. You need the repository for `pcbv sync`. After an update of the app,
+run `pcbv repo init` again to get the current commit guard. Your files stay as they are.
 
 If you have no hardware, press **Start the virtual board** in the Console panel. It runs a virtual board
 on a pseudo-terminal and lists it like a USB adapter. In a terminal, `pcbv vdev` does the same.
@@ -296,12 +297,9 @@ distributions. They were tested in containers on Ubuntu 24.04, Debian 13 and Fed
 
 Known limits outside Arch:
 
-- **Serial ports.** The group is `dialout`. Add yourself with `sudo usermod -aG dialout $USER`, then log out
-  and in. The app's bench check still asks for `uucp`. Ignore that line.
 - **Git backup.** The commit guard needs gitleaks 8.21 or newer. Debian 13 and Ubuntu 24.04 package 8.16,
-  and with that version the guard refuses every commit. Install a
-  [gitleaks release](https://github.com/gitleaks/gitleaks/releases) instead. Fedora's package works.
-- **Install hints.** The app and the wiki give `pacman` commands. Use your own package manager instead.
+  which cannot run the scan. Install a [gitleaks release](https://github.com/gitleaks/gitleaks/releases)
+  instead. Fedora's package works. The bench check tells you when gitleaks is too old.
 - **Desktop app.** The Tauri shell was not tested outside Arch.
 - **Development.** The tests and the lint need Node.js 22 or newer. Ubuntu 24.04 and Debian 13 package older
   versions.
@@ -314,7 +312,7 @@ Known limits outside Arch:
 | tio or picocom | a second serial terminal, to check the Console against | `yay -S tio` or `sudo pacman -S picocom` | optional |
 | sigrok | making logic captures (the app reads them without it) | `sudo pacman -S sigrok-cli pulseview` | logic analyzers |
 | FX2 firmware | the firmware sigrok loads into FX2-based analyzers (the common 8-channel clones); unplug and replug the analyzer after installing | `sudo pacman -S sigrok-firmware-fx2lafw` | FX2-based logic analyzers |
-| the `uucp` group (`dialout` outside Arch) | access to USB serial adapters | `sudo usermod -aG uucp $USER`, then log out and in | real hardware |
+| the group that owns serial ports: `uucp` on Arch, `dialout` on Debian, Ubuntu and Fedora | access to USB serial adapters | `sudo usermod -aG uucp $USER` (or `dialout`), then log out and in | real hardware |
 
 ## Command line
 

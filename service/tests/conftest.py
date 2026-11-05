@@ -1,7 +1,10 @@
+import os
+
 import pytest
 
 from pcbv import github
 from pcbv.board import Board
+from pcbv.datarepo import gitleaks_status
 
 import helpers
 
@@ -33,3 +36,9 @@ def no_github(monkeypatch):
     """No test may reach GitHub: the private check answers 404 (private). A test that wants another answer
     replaces `github.github_status`; the tests of the real function put it back."""
     monkeypatch.setattr(github, "github_status", lambda owner, repo: 404)
+
+
+@pytest.fixture
+def working_gitleaks():
+    """See helpers.needs_gitleaks. Asks the real probe, also when a test replaces datarepo.gitleaks_status."""
+    helpers.require_gitleaks(gitleaks_status(), bool(os.environ.get("CI")))

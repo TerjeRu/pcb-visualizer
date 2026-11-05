@@ -2,9 +2,9 @@
 #
 # Private build from this repository through git:
 #   PCBV_REF=branch=<branch> makepkg -f     before the release is tagged
-#   makepkg -si                             from the tag v0.1.0 on
+#   makepkg -si                             from the tag v0.1.1 on
 pkgname=pcbv
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc='Local workbench for documenting the debug interfaces of hardware you own'
 arch=('x86_64')

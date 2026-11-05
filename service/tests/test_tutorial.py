@@ -1,4 +1,3 @@
-import shutil
 
 import pytest
 from starlette.testclient import TestClient
@@ -9,6 +8,8 @@ from pcbv.boards import TUTORIAL_SLUG, InvalidSlug, board_path, list_boards, pra
 from pcbv.datarepo import init_repo, sync
 from pcbv.fsutil import Directory
 from pcbv.server import create_app
+
+from helpers import needs_gitleaks
 
 TOKEN = "test-token-123"
 AUTH = {"X-PCBV-Protocol": "2", "Authorization": f"Bearer {TOKEN}"}
@@ -177,7 +178,7 @@ def test_a_half_built_folder_is_replaced(tmp_path):
     assert inspect_board(root / TUTORIAL_SLUG)["snapshot"] == "in-sync"
 
 
-@pytest.mark.skipif(shutil.which("gitleaks") is None, reason="gitleaks not installed")
+@needs_gitleaks
 def test_syncing_the_data_repository_after_a_tutorial_run_commits_nothing_new(tmp_path, monkeypatch):
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")

@@ -11,6 +11,8 @@ A serial terminal program opens a serial port, shows what arrives and sends what
 | screen | `sudo pacman -S screen` | `screen /dev/ttyUSB0 115200` | `Ctrl-a k`, then `y` |
 | minicom | `sudo pacman -S minicom` | `minicom -D /dev/ttyUSB0 -b 115200` | `Ctrl-a x` |
 
+On Debian and Ubuntu, install them with `sudo apt install tio picocom screen minicom`. On Fedora, use `sudo dnf install tio picocom screen minicom`.
+
 tio reconnects automatically when you unplug the adapter and plug it back in. This makes it the most convenient of the four for board work.
 
 ## Settings
@@ -38,7 +40,7 @@ The Console panel saves every session automatically as a console capture in the 
 | Symptom | Cause |
 |---|---|
 | "Device or resource busy" | another program, or the app's Console panel, has the port open |
-| "Permission denied" | your user is not in the `uucp` group. See [USB-UART adapter](usb-uart-adapter) |
+| "Permission denied" | your user is not in the group that owns serial ports (`uucp` on Arch, `dialout` on Debian, Ubuntu and Fedora). See [USB-UART adapter](usb-uart-adapter) |
 | Output appears, but typing does nothing | the adapter's TXD is not connected to the board's RX, or flow control is on |
 | Every character appears twice | local echo is on, and the board already echoes what you type |
 | Lines run into each other or step across the screen | the line endings do not match. The `--map` option of tio and the `--imap` option of picocom change them |

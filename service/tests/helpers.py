@@ -1,6 +1,22 @@
 """Small builders so tests read as intent, not as dict plumbing."""
 from __future__ import annotations
 
+import pytest
+
+# For tests that commit through the real commit guard; the fixture is in conftest.py.
+needs_gitleaks = pytest.mark.usefixtures("working_gitleaks")
+
+
+def require_gitleaks(state: str, ci: bool) -> None:
+    """Skips the test when gitleaks cannot run the guard's scan. In CI that fails instead, so the guard
+    tests can never be skipped there without anyone noticing."""
+    if state == "ok":
+        return
+    reason = f"the commit guard needs gitleaks 8.21 or newer, and gitleaks here is {state}"
+    if ci:
+        pytest.fail(reason)
+    pytest.skip(reason)
+
 
 def asset(id="img_a", path="assets/a.jpg", **extra):
     return {"id": id, "kind": "image", "path": path, "label": id, "side": "front",

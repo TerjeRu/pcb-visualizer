@@ -5,15 +5,16 @@ import subprocess
 import pytest
 from starlette.testclient import TestClient
 
-from pcbv import cli, datarepo, github, gitsetup
+from pcbv import cli, datarepo, distro, github, gitsetup
 from pcbv.assistant import MemoryKeyStore
 from pcbv.datarepo import RepoError, git, init_repo, redact, run
 from pcbv.server import create_app
 
+from helpers import needs_gitleaks
+
 TOKEN = "test-token-123"
 AUTH = {"X-PCBV-Protocol": "2", "Authorization": f"Bearer {TOKEN}"}
 REAL = {"github_status": github.github_status, "ls_remote": gitsetup.ls_remote}
-needs_gitleaks = pytest.mark.skipif(shutil.which("gitleaks") is None, reason="gitleaks not installed")
 
 
 @pytest.fixture(autouse=True)
@@ -39,7 +40,10 @@ def folder(tmp_path):
 
 
 @pytest.fixture
-def client(folder):
+def client(folder, monkeypatch):
+    """The setup routes, with gitleaks reported as working: these tests are about the steps. The ones that
+    run the real commit guard are marked needs_gitleaks."""
+    monkeypatch.setattr(datarepo, "gitleaks_status", lambda: "ok")
     boards = folder / "boards"
     boards.mkdir(parents=True)
     with TestClient(create_app(boards, TOKEN, keystore=MemoryKeyStore()), base_url="http://localhost:8765") as c:
@@ -91,12 +95,30 @@ def test_a_fresh_folder_reports_what_is_missing(client):
 
 
 def test_check_gives_the_install_command_for_what_is_missing(client, monkeypatch):
+    monkeypatch.setattr(distro, "family", lambda: "arch")
+    monkeypatch.setattr(datarepo, "gitleaks_status", lambda: "missing")
     monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/git" if name == "git" else None)
     body = client.step("check").json()
-    assert body == {"ok": False, "detail": "gitleaks not installed. Run: sudo pacman -S gitleaks"}
+    assert body == {"ok": False, "detail": "gitleaks is not installed, so the secret scan cannot run; install it with: sudo pacman -S gitleaks"}
     monkeypatch.setattr("shutil.which", lambda name: None)
-    assert "sudo pacman -S git && sudo pacman -S gitleaks" in client.step("check").json()["detail"]
+    detail = client.step("check").json()["detail"]
+    assert detail.startswith("git is not installed; install it with: sudo pacman -S git\n") and detail.endswith("sudo pacman -S gitleaks")
     assert "run the check step" in client.step("init").json()["detail"]
+
+
+@pytest.mark.parametrize("fam, fix", [
+    ("fedora", "update it with: sudo dnf install gitleaks"),
+    ("debian", "download gitleaks 8.21 or newer from https://github.com/gitleaks/gitleaks/releases"),
+    (None, "update it with your package manager"),
+])
+def test_an_old_gitleaks_stops_the_setup_with_the_fix_for_the_distribution(client, monkeypatch, fam, fix):
+    monkeypatch.setattr(distro, "family", lambda: fam)
+    monkeypatch.setattr(datarepo, "gitleaks_status", lambda: "too-old")
+    body = client.step("check").json()
+    assert body["ok"] is False and "needs gitleaks 8.21 or newer" in body["detail"] and body["detail"].endswith(fix)
+    assert "run the check step" in client.step("init").json()["detail"]
+    detail = client.get("/api/git", headers=AUTH).json()["detail"]
+    assert detail["gitleaks"] is False and sum(line.startswith("gitleaks") for line in detail["problems"]) == 1
 
 
 @needs_gitleaks

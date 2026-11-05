@@ -132,10 +132,10 @@ end: the main window loads the app from the local service, so the browser stays 
 
 ### The Arch package
 
-`packaging/arch/` builds `pcbv-0.1.0-1-x86_64.pkg.tar.zst` with `makepkg` from a git ref of this checkout
-(`PCBV_REF=branch=<name>`, or the tag `v0.1.0` by default), so the build never sees `node_modules`, notes or
+`packaging/arch/` builds `pcbv-0.1.1-1-x86_64.pkg.tar.zst` with `makepkg` from a git ref of this checkout
+(`PCBV_REF=branch=<name>`, or the tag `v$pkgver` by default), so the build never sees `node_modules`, notes or
 uncommitted files. It needs the network (uv, cargo and npm download). Install it with `makepkg -si` in
-`packaging/arch/`, or `sudo pacman -U pcbv-0.1.0-1-x86_64.pkg.tar.zst`; remove it with `sudo pacman -R pcbv`.
+`packaging/arch/`, or `sudo pacman -U pcbv-0.1.1-1-x86_64.pkg.tar.zst`; remove it with `sudo pacman -R pcbv`.
 
 | Path | What |
 |---|---|

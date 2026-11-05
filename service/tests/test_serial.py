@@ -313,6 +313,28 @@ def test_immediate_port_failure_frees_port(board_with_vdev, monkeypatch):
     client.post(f"{url}/close", headers=AUTH)
 
 
+def test_a_permission_error_names_the_group_that_owns_the_port(board_with_vdev, monkeypatch):
+    import grp
+    import os
+    from pcbv import distro, serialmgr
+
+    def refused(*args, **kwargs):
+        raise PermissionError(13, "Permission denied")
+
+    client, slug, link, _ = board_with_vdev
+    owner = os.stat(link).st_gid
+    monkeypatch.setattr(grp, "getgrgid", lambda gid: SimpleNamespace(gr_name="dialout" if gid == owner else "other"))
+    monkeypatch.setattr(serialmgr.serial, "Serial", refused)
+    answer = client.post(f"/api/boards/{slug}/serial", json={"port": link, "baud": 115200}, headers=AUTH)
+    assert answer.status_code == 409 and answer.json()["error"] == "port_busy"
+    assert "Add yourself to the dialout group with: sudo usermod -aG dialout $USER." in answer.json()["message"]
+
+    monkeypatch.setattr(distro, "group_of", lambda path: None)
+    monkeypatch.setattr(distro, "serial_group", lambda: "uucp")
+    answer = client.post(f"/api/boards/{slug}/serial", json={"port": link, "baud": 115200}, headers=AUTH)
+    assert "sudo usermod -aG uucp $USER" in answer.json()["message"]
+
+
 def test_immediate_serial_output_arrives_in_order_before_end(board_with_vdev, monkeypatch):
     from pcbv import serialmgr
 

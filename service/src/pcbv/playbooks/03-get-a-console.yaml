@@ -66,7 +66,7 @@ steps:
       4. If you see garbage, disconnect and try 57600. Then try 38400. Power-cycle the board each time.
       5. If you see nothing, unplug everything. Check that RX and TX cross and that the ground wire is connected.
 
-      If **Connect** says permission denied, your user is not in the `uucp` group yet.
+      If **Connect** says permission denied, add your user to the group that owns serial ports. That group is `uucp` on Arch, and `dialout` on Debian, Ubuntu and Fedora.
     checks:
       - kind: capture
         seen_any: [bootloader, kernel]

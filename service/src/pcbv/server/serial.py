@@ -5,6 +5,7 @@ import asyncio
 
 from fastapi import APIRouter, Request
 
+from .. import distro
 from ..captures import capture_stopped_patch
 from ..events import EventError
 from ..journal import StorageError
@@ -137,7 +138,10 @@ async def serial_open(slug: str, request: Request, state: State):
                 board_dir=entry.board.files, slug=slug, port=port, baud=baud, on_text=on_text, on_end=on_end,
                 on_seen=on_seen), discard_open)
         except OSError as exc:
-            hint = " Add yourself to the uucp group with: sudo usermod -aG uucp $USER. Then log in again." if "ermission" in str(exc) else ""
+            hint = ""
+            if "ermission" in str(exc):
+                group = distro.group_of(port["path"]) or distro.serial_group()
+                hint = f" Add yourself to the {group} group with: sudo usermod -aG {group} $USER. Then log in again."
             return error(409, "port_busy", f"The service could not open {port['label']}: {str(exc).rstrip('.')}.{hint}")
         holder["s"] = session
         capture = {"id": session.id, "kind": "serial", "path": session.rel_path, "port": port["path"],

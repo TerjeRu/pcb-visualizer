@@ -4,7 +4,7 @@ import subprocess
 import pytest
 from starlette.testclient import TestClient
 
-from pcbv import settings
+from pcbv import datarepo, settings
 from pcbv.board import Board
 from pcbv.datarepo import init_repo
 from pcbv.assistant import MemoryKeyStore
@@ -108,6 +108,7 @@ def config(tmp_path, monkeypatch):
 def test_both_new_settings_start_off_and_are_saved(client, tmp_path, monkeypatch):
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
     monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(datarepo, "gitleaks_status", lambda: "ok")
     assert client.get("/api/settings", headers=AUTH).json() == {**BOARDED, "data_folder": str(tmp_path)}
     init_repo(tmp_path)
     saved = client.post("/api/settings", json={"assistant": "on", "git": "on"}, headers=AUTH)

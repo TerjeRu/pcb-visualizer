@@ -14,14 +14,13 @@ from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import urlsplit
 
-from . import github
+from . import datarepo, distro, github
 from .datarepo import RepoError, find_repo, git, guard_problem, init_repo, redact, run, sync
 
 STEPS = ("check", "init", "ignore", "remote", "sync")
 MAX_URL = 2048
 DEADLINE = 60
 ACCESS_DEADLINE = 20
-INSTALL = {"git": "sudo pacman -S git", "gitleaks": "sudo pacman -S gitleaks"}
 
 SCP_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9.-]*:[A-Za-z0-9._~/][A-Za-z0-9._~/+@-]*$")
 HTTPS_PATH_RE = re.compile(r"^[A-Za-z0-9._~/%+@:-]*$")
@@ -79,12 +78,17 @@ def ls_remote(folder: Path, url: str) -> Reply:
     return Reply(result.returncode, result.stderr)
 
 
-def _tools() -> dict[str, bool]:
-    return {name: shutil.which(name) is not None for name in INSTALL}
-
-
-def _missing_tools() -> list[str]:
-    return [name for name, found in _tools().items() if not found]
+def _tool_problems() -> list[str]:
+    """One line, with the fix, for git when it is missing and for gitleaks when it cannot run the guard's scan."""
+    found = []
+    if shutil.which("git") is None:
+        command = distro.install_command(["git"], distro.family())
+        found.append(f"git is not installed; install it with: {command}" if command else
+                     "git is not installed; install it with your package manager")
+    gitleaks = datarepo.gitleaks_problem()
+    if gitleaks:
+        found.append(gitleaks)
+    return found
 
 
 def _is_repo(folder: Path) -> bool:
@@ -116,15 +120,12 @@ def _last_commit(folder: Path) -> str | None:
 
 def problems(folder: Path, boards: Path) -> list[str]:
     """What stops git from being turned on, one line each. Empty when the local checks all pass."""
-    found = []
-    missing = _missing_tools()
-    if missing:
-        found.append(f"{' and '.join(missing)} not installed; run: {' && '.join(INSTALL[name] for name in missing)}")
+    found = _tool_problems()
     if not _is_repo(folder):
         found.append(f"{folder} is not a git repository yet; run the init step")
         return found
     guard = guard_problem(folder)
-    if guard and "gitleaks" not in missing:
+    if guard and guard not in found:
         found.append(guard)
     if _originals_ignored(folder, boards) is False:
         found.append("photo originals are not ignored by this repository, so their location data (EXIF and GPS) could be committed")
@@ -133,9 +134,9 @@ def problems(folder: Path, boards: Path) -> list[str]:
 
 def status(folder: Path, boards: Path, setting: str) -> dict:
     found = problems(folder, boards)
-    tools = _tools()
     return {"ok": not found, "detail": {
-        "setting": setting, "folder": str(folder), "git": tools["git"], "gitleaks": tools["gitleaks"],
+        "setting": setting, "folder": str(folder), "git": shutil.which("git") is not None,
+        "gitleaks": datarepo.gitleaks_status() == "ok",
         "repository": _is_repo(folder), "guard": _is_repo(folder) and guard_problem(folder) is None,
         "originals_ignored": _originals_ignored(folder, boards), "remote": _remote(folder),
         "last_commit": _last_commit(folder), "problems": found}}
@@ -150,12 +151,12 @@ def run_step(folder: Path, boards: Path, step: object, data: dict) -> dict:
     if step == "remote" and set(data) - {"step", "url", "replace"}:
         raise SetupError("the remote step takes only url and replace")
     if step == "check":
-        missing = _missing_tools()
-        if missing:
-            return {"ok": False, "detail": f"{' and '.join(missing)} not installed. Run: {' && '.join(INSTALL[name] for name in missing)}"}
+        found = _tool_problems()
+        if found:
+            return {"ok": False, "detail": "\n".join(found)}
         return {"ok": True, "detail": "git and gitleaks are installed"}
-    if _missing_tools():
-        return {"ok": False, "detail": "git and gitleaks must be installed first; run the check step"}
+    if _tool_problems():
+        return {"ok": False, "detail": f"git and gitleaks {datarepo.GITLEAKS_MIN} or newer must be installed first; run the check step"}
     try:
         if step == "init":
             created = init_repo(folder)

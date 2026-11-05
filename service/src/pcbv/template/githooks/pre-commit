@@ -27,14 +27,22 @@ fi
 
 if ! command -v gitleaks >/dev/null 2>&1; then
   echo "pcbv commit guard: gitleaks is not installed, so the secret scan cannot run." >&2
-  echo "Install it with: sudo pacman -S gitleaks" >&2
+  echo "Install gitleaks 8.21 or newer." >&2
   exit 1
 fi
 
+# Exit 3 means a finding. Anything else that is not 0 means gitleaks could not scan, for example a
+# release older than 8.21 without the git command: that is not a secret, but nothing is committed.
 top=$(git rev-parse --show-toplevel)
-if ! gitleaks git --pre-commit --staged --redact --no-banner --log-level warn \
-     --config "$top/.gitleaks.toml" "$top"; then
+gitleaks git --pre-commit --staged --redact --no-banner --log-level warn --exit-code 3 \
+  --config "$top/.gitleaks.toml" "$top"
+status=$?
+if [ "$status" -eq 3 ]; then
   echo "pcbv commit guard: possible secret in the staged changes (shown redacted above)." >&2
   echo "Remove it, or if it is a false positive add the line's fingerprint to .gitleaksignore." >&2
+  exit 1
+fi
+if [ "$status" -ne 0 ]; then
+  echo "pcbv commit guard: gitleaks could not run the scan. It needs gitleaks 8.21 or newer. Nothing was committed." >&2
   exit 1
 fi

@@ -13,11 +13,13 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
+import threading
 from collections import Counter
 from importlib import resources
 from pathlib import Path
 
-from . import github
+from . import distro, github
 from .hints import command
 
 HOOKS_DIR = ".githooks"
@@ -118,9 +120,80 @@ def guard_problem(repo: Path) -> str | None:
         return f"the commit guard is not active in this clone; run: {command('repo', 'init')}"
     if not hook.stat().st_mode & 0o100:
         return f"{hook} is not executable; run: {command('repo', 'init')}"
-    if shutil.which("gitleaks") is None:
-        return "gitleaks is not installed, so the secret scan cannot run; install it with: sudo pacman -S gitleaks"
-    return None
+    return gitleaks_problem()
+
+
+# gitleaks 8.16 (Debian 13, Ubuntu 24.04) has no `git` command and 8.19 lacks a flag the guard's call
+# needs; 8.21 is the oldest release tested to work. Builds often print no usable version, so the probe
+# runs the guard's own command instead of reading one.
+GITLEAKS_MIN = "8.21"
+GITLEAKS_RELEASES = "https://github.com/gitleaks/gitleaks/releases"
+PROBE_DEADLINE = 10
+_probe_lock = threading.Lock()
+_probed: dict[tuple[str, int], str] = {}
+
+
+def gitleaks_status() -> str:
+    """Whether gitleaks can run the commit guard's scan: missing, too-old or ok. The answer is
+    kept per binary (resolved path and mtime), so it runs once per process and again after an update."""
+    found = shutil.which("gitleaks")
+    if found is None:
+        return "missing"
+    try:
+        binary = Path(found).resolve()
+        key = (str(binary), binary.stat().st_mtime_ns)
+    except OSError:
+        return "missing"
+    with _probe_lock:
+        if key not in _probed:
+            state = _probe(str(binary))
+            if state is None:
+                return "too-old"
+            _probed[key] = state
+        return _probed[key]
+
+
+def _probe(gitleaks: str) -> str | None:
+    """None when git itself cannot make the empty repository, so the answer says nothing about gitleaks
+    and is not kept: once git works, the next call probes again."""
+    env = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+    with tempfile.TemporaryDirectory(prefix="pcbv-gitleaks-") as folder:
+        try:
+            made = run(["git", "init", "-q", folder], timeout=PROBE_DEADLINE, env=env)  # noqa: S607 - git from PATH
+        except (OSError, RepoError):
+            return None
+        if made.returncode != 0:
+            return None
+        try:
+            result = run([gitleaks, "git", "--pre-commit", "--staged", "--redact", "--no-banner", "--log-level", "error",
+                          "--exit-code", "3", folder], timeout=PROBE_DEADLINE, env=env)
+        except (OSError, RepoError):
+            return "too-old"
+    return "ok" if result.returncode == 0 else "too-old"
+
+
+def gitleaks_fix(fam: str | None) -> str:
+    """The fix to show for a missing or old gitleaks. Debian and Ubuntu package one that is too old."""
+    if fam == "debian":
+        return f"Download gitleaks {GITLEAKS_MIN} or newer from {GITLEAKS_RELEASES}"
+    return distro.install_fix(["gitleaks"], fam)
+
+
+def gitleaks_problem() -> str | None:
+    """Why gitleaks cannot run the commit guard's scan, with the fix, or None when it can."""
+    state = gitleaks_status()
+    if state == "ok":
+        return None
+    fam = distro.family()
+    if fam == "debian":
+        fix = f"download gitleaks {GITLEAKS_MIN} or newer from {GITLEAKS_RELEASES}"
+    else:
+        verb = "install" if state == "missing" else "update"
+        command = distro.install_command(["gitleaks"], fam)
+        fix = f"{verb} it with: {command}" if command else f"{verb} it with your package manager"
+    if state == "missing":
+        return f"gitleaks is not installed, so the secret scan cannot run; {fix}"
+    return f"gitleaks is too old to run the secret scan, which needs gitleaks {GITLEAKS_MIN} or newer; {fix}"
 
 
 def rebase_in_progress(repo: Path) -> bool:
