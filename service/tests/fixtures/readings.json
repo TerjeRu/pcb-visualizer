@@ -1,0 +1,788 @@
+{
+  "parse": [
+    {
+      "input": "3.29V",
+      "expect": {
+        "mode": "dc",
+        "value": 3.29,
+        "unit": "V",
+        "text": "3.29 V"
+      }
+    },
+    {
+      "input": "3.31V",
+      "expect": {
+        "mode": "dc",
+        "value": 3.31,
+        "unit": "V",
+        "text": "3.31 V"
+      }
+    },
+    {
+      "input": "3.29v",
+      "expect": {
+        "mode": "dc",
+        "value": 3.29,
+        "unit": "V",
+        "text": "3.29 V"
+      }
+    },
+    {
+      "input": "3,29 v",
+      "expect": {
+        "mode": "dc",
+        "value": 3.29,
+        "unit": "V",
+        "text": "3.29 V"
+      }
+    },
+    {
+      "input": "  3.3  V ",
+      "expect": {
+        "mode": "dc",
+        "value": 3.3,
+        "unit": "V",
+        "text": "3.3 V"
+      }
+    },
+    {
+      "input": "3.3",
+      "expect": {
+        "mode": "dc",
+        "value": 3.3,
+        "unit": "V",
+        "text": "3.3 V"
+      }
+    },
+    {
+      "input": "12",
+      "expect": {
+        "mode": "dc",
+        "value": 12.0,
+        "unit": "V",
+        "text": "12 V"
+      }
+    },
+    {
+      "input": "-0.5V",
+      "expect": {
+        "mode": "dc",
+        "value": -0.5,
+        "unit": "V",
+        "text": "-0.5 V"
+      }
+    },
+    {
+      "input": "-0V",
+      "expect": {
+        "mode": "dc",
+        "value": -0.0,
+        "unit": "V",
+        "text": "-0 V"
+      }
+    },
+    {
+      "input": "330mV",
+      "expect": {
+        "mode": "dc",
+        "value": 0.33,
+        "unit": "V",
+        "text": "0.33 V"
+      }
+    },
+    {
+      "input": "330 MV",
+      "expect": {
+        "mode": "dc",
+        "value": 0.33,
+        "unit": "V",
+        "text": "0.33 V"
+      }
+    },
+    {
+      "input": "0.0004V",
+      "expect": {
+        "mode": "dc",
+        "value": 0.0004,
+        "unit": "V",
+        "text": "0.0004 V"
+      }
+    },
+    {
+      "input": "0.0000004V",
+      "expect": {
+        "mode": "dc",
+        "value": 0.0,
+        "unit": "V",
+        "text": "0 V"
+      }
+    },
+    {
+      "input": "0.0078125V",
+      "expect": {
+        "mode": "dc",
+        "value": 0.007812,
+        "unit": "V",
+        "text": "0.007812 V"
+      }
+    },
+    {
+      "input": "1234565V",
+      "expect": {
+        "mode": "dc",
+        "value": 1234565.0,
+        "unit": "V",
+        "text": "1.23456e+06 V"
+      }
+    },
+    {
+      "input": "1234567",
+      "expect": {
+        "mode": "dc",
+        "value": 1234567.0,
+        "unit": "V",
+        "text": "1.23457e+06 V"
+      }
+    },
+    {
+      "input": "0.3ohm",
+      "expect": {
+        "mode": "ohm",
+        "value": 0.3,
+        "unit": "Ω",
+        "text": "0.3 Ω"
+      }
+    },
+    {
+      "input": "0.3 OHM",
+      "expect": {
+        "mode": "ohm",
+        "value": 0.3,
+        "unit": "Ω",
+        "text": "0.3 Ω"
+      }
+    },
+    {
+      "input": "5 ohms",
+      "expect": {
+        "mode": "ohm",
+        "value": 5.0,
+        "unit": "Ω",
+        "text": "5 Ω"
+      }
+    },
+    {
+      "input": "7 R",
+      "expect": {
+        "mode": "ohm",
+        "value": 7.0,
+        "unit": "Ω",
+        "text": "7 Ω"
+      }
+    },
+    {
+      "input": "0.5Ω",
+      "expect": {
+        "mode": "ohm",
+        "value": 0.5,
+        "unit": "Ω",
+        "text": "0.5 Ω"
+      }
+    },
+    {
+      "input": "4.7k",
+      "expect": {
+        "mode": "ohm",
+        "value": 4700.0,
+        "unit": "Ω",
+        "text": "4.7 kΩ"
+      }
+    },
+    {
+      "input": "4.7K",
+      "expect": {
+        "mode": "ohm",
+        "value": 4700.0,
+        "unit": "Ω",
+        "text": "4.7 kΩ"
+      }
+    },
+    {
+      "input": "4.7 kohm",
+      "expect": {
+        "mode": "ohm",
+        "value": 4700.0,
+        "unit": "Ω",
+        "text": "4.7 kΩ"
+      }
+    },
+    {
+      "input": "4.7 kΩ",
+      "expect": {
+        "mode": "ohm",
+        "value": 4700.0,
+        "unit": "Ω",
+        "text": "4.7 kΩ"
+      }
+    },
+    {
+      "input": "4.7 kΩ",
+      "expect": {
+        "mode": "ohm",
+        "value": 4700.0,
+        "unit": "Ω",
+        "text": "4.7 kΩ"
+      }
+    },
+    {
+      "input": "1.2MΩ",
+      "expect": {
+        "mode": "ohm",
+        "value": 1200000.0,
+        "unit": "Ω",
+        "text": "1.2 MΩ"
+      }
+    },
+    {
+      "input": "2.2 Mohm",
+      "expect": {
+        "mode": "ohm",
+        "value": 2200000.0,
+        "unit": "Ω",
+        "text": "2.2 MΩ"
+      }
+    },
+    {
+      "input": "3 MΩ",
+      "expect": {
+        "mode": "ohm",
+        "value": 3000000.0,
+        "unit": "Ω",
+        "text": "3 MΩ"
+      }
+    },
+    {
+      "input": "2,2k",
+      "expect": {
+        "mode": "ohm",
+        "value": 2200.0,
+        "unit": "Ω",
+        "text": "2.2 kΩ"
+      }
+    },
+    {
+      "input": "1234.5ohm",
+      "expect": {
+        "mode": "ohm",
+        "value": 1234.5,
+        "unit": "Ω",
+        "text": "1.2345 kΩ"
+      }
+    },
+    {
+      "input": "999999.5ohm",
+      "expect": {
+        "mode": "ohm",
+        "value": 999999.5,
+        "unit": "Ω",
+        "text": "1000 kΩ"
+      }
+    },
+    {
+      "input": "1234567ohm",
+      "expect": {
+        "mode": "ohm",
+        "value": 1234567.0,
+        "unit": "Ω",
+        "text": "1.23457 MΩ"
+      }
+    },
+    {
+      "input": "OL",
+      "expect": {
+        "mode": "ohm",
+        "value": null,
+        "unit": "Ω",
+        "text": "OL"
+      }
+    },
+    {
+      "input": "ol",
+      "expect": {
+        "mode": "ohm",
+        "value": null,
+        "unit": "Ω",
+        "text": "OL"
+      }
+    },
+    {
+      "input": "open",
+      "expect": {
+        "mode": "ohm",
+        "value": null,
+        "unit": "Ω",
+        "text": "OL"
+      }
+    },
+    {
+      "input": "O.L.",
+      "expect": {
+        "mode": "ohm",
+        "value": null,
+        "unit": "Ω",
+        "text": "OL"
+      }
+    },
+    {
+      "input": "  OL ",
+      "expect": {
+        "mode": "ohm",
+        "value": null,
+        "unit": "Ω",
+        "text": "OL"
+      }
+    },
+    {
+      "input": "beep",
+      "expect": {
+        "mode": "continuity",
+        "value": 0.0,
+        "unit": "Ω",
+        "text": "beep"
+      }
+    },
+    {
+      "input": "BEEP",
+      "expect": {
+        "mode": "continuity",
+        "value": 0.0,
+        "unit": "Ω",
+        "text": "beep"
+      }
+    },
+    {
+      "input": "short",
+      "expect": {
+        "mode": "continuity",
+        "value": 0.0,
+        "unit": "Ω",
+        "text": "beep"
+      }
+    },
+    {
+      "input": "continuity",
+      "expect": {
+        "mode": "continuity",
+        "value": 0.0,
+        "unit": "Ω",
+        "text": "beep"
+      }
+    },
+    {
+      "input": "lots",
+      "error": "cannot read 'lots'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "3.3A",
+      "error": "cannot read '3.3A'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "",
+      "error": "cannot read ''; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "   ",
+      "error": "cannot read '   '; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "V",
+      "error": "cannot read 'V'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "k",
+      "error": "cannot read 'k'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "1e3",
+      "error": "cannot read '1e3'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "3.3.3V",
+      "error": "cannot read '3.3.3V'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "1 000",
+      "error": "cannot read '1 000'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "3..3V",
+      "error": "cannot read '3..3V'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "--3V",
+      "error": "cannot read '--3V'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "+3V",
+      "error": "cannot read '+3V'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "3V3",
+      "error": "cannot read '3V3'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "it's",
+      "error": "cannot read \"it's\"; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "say \"hi\"",
+      "error": "cannot read 'say \"hi\"'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "it's \"x\"",
+      "error": "cannot read 'it\\'s \"x\"'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "back\\slash",
+      "error": "cannot read 'back\\\\slash'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "tab\there",
+      "error": "cannot read 'tab\\there'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "3.3 V extra",
+      "error": "cannot read '3.3 V extra'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "123456V",
+      "expect": {
+        "mode": "dc",
+        "value": 123456.0,
+        "unit": "V",
+        "text": "123456 V"
+      }
+    },
+    {
+      "input": "100000v",
+      "expect": {
+        "mode": "dc",
+        "value": 100000.0,
+        "unit": "V",
+        "text": "100000 V"
+      }
+    },
+    {
+      "input": "123456Mohm",
+      "expect": {
+        "mode": "ohm",
+        "value": 123456000000.0,
+        "unit": "Ω",
+        "text": "123456 MΩ"
+      }
+    },
+    {
+      "input": "99999.95Mohm",
+      "expect": {
+        "mode": "ohm",
+        "value": 99999950000.0,
+        "unit": "Ω",
+        "text": "99999.9 MΩ"
+      }
+    },
+    {
+      "input": "1000",
+      "expect": {
+        "mode": "dc",
+        "value": 1000.0,
+        "unit": "V",
+        "text": "1000 V"
+      }
+    },
+    {
+      "input": "1",
+      "expect": {
+        "mode": "dc",
+        "value": 1.0,
+        "unit": "V",
+        "text": "1 V"
+      }
+    },
+    {
+      "input": "4.7K",
+      "expect": {
+        "mode": "ohm",
+        "value": 4700.0,
+        "unit": "Ω",
+        "text": "4.7 kΩ"
+      }
+    },
+    {
+      "input": "4.7kΩ",
+      "expect": {
+        "mode": "ohm",
+        "value": 4700.0,
+        "unit": "Ω",
+        "text": "4.7 kΩ"
+      }
+    },
+    {
+      "input": "4.7 KΩ",
+      "expect": {
+        "mode": "ohm",
+        "value": 4700.0,
+        "unit": "Ω",
+        "text": "4.7 kΩ"
+      }
+    },
+    {
+      "input": "3.3Ω",
+      "expect": {
+        "mode": "ohm",
+        "value": 3.3,
+        "unit": "Ω",
+        "text": "3.3 Ω"
+      }
+    },
+    {
+      "input": " 3.3V",
+      "expect": {
+        "mode": "dc",
+        "value": 3.3,
+        "unit": "V",
+        "text": "3.3 V"
+      }
+    },
+    {
+      "input": "3.3　V",
+      "expect": {
+        "mode": "dc",
+        "value": 3.3,
+        "unit": "V",
+        "text": "3.3 V"
+      }
+    },
+    {
+      "input": "3.3\u001cV",
+      "expect": {
+        "mode": "dc",
+        "value": 3.3,
+        "unit": "V",
+        "text": "3.3 V"
+      }
+    },
+    {
+      "input": "3.3V",
+      "expect": {
+        "mode": "dc",
+        "value": 3.3,
+        "unit": "V",
+        "text": "3.3 V"
+      }
+    },
+    {
+      "input": "﻿3.3V",
+      "error": "cannot read '\\ufeff3.3V'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "3.3﻿V",
+      "error": "cannot read '3.3\\ufeffV'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "a\u0001b",
+      "error": "cannot read 'a\\x01b'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "ab",
+      "error": "cannot read 'a\\x80b'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "a b",
+      "error": "cannot read 'a\\xa0b'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "a​b",
+      "error": "cannot read 'a\\u200bb'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "a b",
+      "error": "cannot read 'a\\u2028b'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "a😀b",
+      "error": "cannot read 'a😀b'; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "３V",
+      "expect": {
+        "mode": "dc",
+        "value": 3.0,
+        "unit": "V",
+        "text": "3 V"
+      }
+    },
+    {
+      "input": "٣V",
+      "expect": {
+        "mode": "dc",
+        "value": 3.0,
+        "unit": "V",
+        "text": "3 V"
+      }
+    },
+    {
+      "input": "१.३V",
+      "expect": {
+        "mode": "dc",
+        "value": 1.3,
+        "unit": "V",
+        "text": "1.3 V"
+      }
+    },
+    {
+      "input": "3.٥٦V",
+      "expect": {
+        "mode": "dc",
+        "value": 3.56,
+        "unit": "V",
+        "text": "3.56 V"
+      }
+    },
+    {
+      "input": "-5k",
+      "error": "a resistance cannot be negative; write it like 0.3ohm or 4.7k"
+    },
+    {
+      "input": "-0ohm",
+      "error": "a resistance cannot be negative; write it like 0.3ohm or 4.7k"
+    },
+    {
+      "input": "-0.3 ohm",
+      "error": "a resistance cannot be negative; write it like 0.3ohm or 4.7k"
+    },
+    {
+      "input": "-4.7kΩ",
+      "error": "a resistance cannot be negative; write it like 0.3ohm or 4.7k"
+    },
+    {
+      "input": "-1Mohm",
+      "error": "a resistance cannot be negative; write it like 0.3ohm or 4.7k"
+    },
+    {
+      "input": "-2r",
+      "error": "a resistance cannot be negative; write it like 0.3ohm or 4.7k"
+    },
+    {
+      "input": "-123456ohm",
+      "error": "a resistance cannot be negative; write it like 0.3ohm or 4.7k"
+    },
+    {
+      "input": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999V",
+      "error": "the number is too large; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "-999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999k",
+      "error": "the number is too large; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep"
+    },
+    {
+      "input": "-3.3V",
+      "expect": {
+        "mode": "dc",
+        "value": -3.3,
+        "unit": "V",
+        "text": "-3.3 V"
+      }
+    },
+    {
+      "input": "-330mV",
+      "expect": {
+        "mode": "dc",
+        "value": -0.33,
+        "unit": "V",
+        "text": "-0.33 V"
+      }
+    }
+  ],
+  "events": [
+    {
+      "input": "3.3V",
+      "powered": null,
+      "expect": {
+        "powered": true,
+        "warnings": []
+      }
+    },
+    {
+      "input": "3.3V",
+      "powered": true,
+      "expect": {
+        "powered": true,
+        "warnings": []
+      }
+    },
+    {
+      "input": "3.3V",
+      "powered": false,
+      "expect": {
+        "powered": false,
+        "warnings": [
+          "a voltage on an unpowered board usually means a capacitor still holds charge"
+        ]
+      }
+    },
+    {
+      "input": "0.3ohm",
+      "powered": null,
+      "expect": {
+        "powered": false,
+        "warnings": []
+      }
+    },
+    {
+      "input": "0.3ohm",
+      "powered": true,
+      "expect": {
+        "powered": true,
+        "warnings": [
+          "resistance and continuity are measured with the board unplugged; on a powered board the reading is meaningless and the meter can be damaged"
+        ]
+      }
+    },
+    {
+      "input": "0.3ohm",
+      "powered": false,
+      "expect": {
+        "powered": false,
+        "warnings": []
+      }
+    },
+    {
+      "input": "beep",
+      "powered": true,
+      "expect": {
+        "powered": true,
+        "warnings": [
+          "resistance and continuity are measured with the board unplugged; on a powered board the reading is meaningless and the meter can be damaged"
+        ]
+      }
+    },
+    {
+      "input": "beep",
+      "powered": false,
+      "expect": {
+        "powered": false,
+        "warnings": []
+      }
+    },
+    {
+      "input": "OL",
+      "powered": true,
+      "expect": {
+        "powered": true,
+        "warnings": [
+          "resistance and continuity are measured with the board unplugged; on a powered board the reading is meaningless and the meter can be damaged"
+        ]
+      }
+    }
+  ]
+}

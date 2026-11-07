@@ -4,15 +4,18 @@ A local workbench to document and explore the debug interfaces of hardware you o
 mark its headers and label the pins. Open a serial console, import logic captures and follow playbooks.
 The app records every change in a plain folder that you can keep in git.
 
-![The workbench: a board photo with chip callouts, header J4 with its pin roles, a playbook, and a root shell on the board](docs/screenshots/workbench.png)
+![The workbench: a board photo with callouts, header J4 with pin roles and a reading, a playbook, and a root shell](docs/screenshots/workbench.png)
 
 *The demo board with the console moved to the bottom. Header J4 is marked on the photo and its pins
-are labelled 3V3, TX, RX and GND. The playbook is at step 3, measuring voltages. The Console is
-connected to the virtual board (`pcbv vdev`) and has a root shell, which lists the flash partitions.*
+are labelled 3V3, TX, RX and GND. Pin 2 (TX) shows its multimeter reading, 3.12 V with the board
+powered. The readings on J4 completed the first three playbook steps, and the playbook is at step 4.
+The Console is connected to the virtual board (`pcbv vdev`) and has a root shell, which lists the
+flash partitions. The readings in this picture are examples.*
 
 | Feature | What it does |
 |---|---|
 | Board and pinout | Shows board photos with header markers and callouts. Each header has a pin grid. Each pin has a role, readings and notes. |
+| Notes | A Markdown notes panel for each board, with Edit, Split and Preview, task lists and dated entries. Notes save while you type. |
 | Playbooks | Step-by-step procedures with safety gates and questions. They check your answers against what the board folder and the Console recorded. |
 | Guided tutorial | *Find the UART* teaches the method on a practice board, kept apart from your own boards. It uses the real panels, with a coach beside them. |
 | Guided or Expert | One switch in the top bar. Guided adds explanations, hints and links to the wiki. Expert removes them. Confirmations for destructive commands stay in both modes. |
@@ -99,15 +102,21 @@ on other machines must use https. A server on this machine may use plain http.
 
 ## Screenshots
 
+![The Notes panel in Split mode: Markdown text on the left, the preview with a task list and a table on the right](docs/screenshots/notes.png)
+
+*The Notes panel in Split mode, with a task list, a table and a dated entry.*
+
 ![The Logic panel with a UART capture zoomed in and its decoded text](docs/screenshots/logic.png)
 
 *A logic capture of the same boot, decoded as UART at 115200 baud.*
 
-![The Agent panel: a question, the tools the assistant used, and a suggested command with Send to console and Decline buttons](docs/screenshots/agent.png)
+![The Agent panel: a question about junk on the console, and an answer that compares two captures and finds the wrong speed](docs/screenshots/agent.png)
 
-*The Agent panel, here with `pcbv fake-model`, the simulated model server used for testing, so the
-reply is canned. The assistant read the board and the boot log, then suggested a command. The command
-is typed into the console only after you choose Send to console.*
+*The Agent panel with a real model, DeepSeek V4 Pro through OpenRouter. The question cost about one
+cent. The Console was opened at 57600 baud, so it showed only junk. The assistant read the board's
+captures and compared the junk with a clean boot log at 115200 baud. It found the wrong speed and
+saw that the TX reading was correct. The assistant reads the board and suggests. Nothing changes
+until you approve it.*
 
 ![A wiki page with a schematic of a UART header](docs/screenshots/wiki.png)
 
@@ -115,7 +124,7 @@ is typed into the console only after you choose Send to console.*
 
 ## Status
 
-Version 0.1.1, with one maintainer. PCB Visualizer is built on Arch Linux with KDE Plasma (Wayland). The
+Version 0.1.2, with one maintainer. PCB Visualizer is built on Arch Linux with KDE Plasma (Wayland). The
 Arch package is the supported install. The app also runs from source on other Linux distributions, with
 the limits in [Other Linux distributions](#other-linux-distributions). [ROADMAP.md](ROADMAP.md) lists the
 planned work.
@@ -184,7 +193,7 @@ Remove the app with `sudo pacman -R pcbv`; your boards and settings stay.
 To install one version without adding the repository, install the file from the GitHub release:
 
 ```sh
-sudo pacman -U https://github.com/TerjeRu/pcb-visualizer/releases/download/v0.1.1/pcbv-0.1.1-1-x86_64.pkg.tar.zst
+sudo pacman -U https://github.com/TerjeRu/pcb-visualizer/releases/download/v0.1.2/pcbv-0.1.2-1-x86_64.pkg.tar.zst
 ```
 
 The release page gives the SHA-256 of the file. This way gets no automatic updates.
@@ -225,7 +234,7 @@ makepkg -si
 ```
 
 The build needs `git`, `uv`, `rust`, `nodejs` and `npm`, and the network. The package carries its own
-Python for the service (about 100 MB). It builds from the git tag `v0.1.1`; to build a branch, use
+Python for the service (about 100 MB). It builds from the git tag `v0.1.2`; to build a branch, use
 `PCBV_REF=branch=<name> makepkg -si`. To update to the latest code, run `git pull` in the checkout, then
 `PCBV_REF=branch=main makepkg -fsi` in `packaging/arch`; `-f` replaces the package file from the last
 build. Remove it with `sudo pacman -R pcbv`; your boards and settings are not touched. `.deb` and
@@ -370,9 +379,16 @@ text field or another panel. Clearing a pin that has a role and readings or a no
 The rest of the window works from the keyboard too, with these limits:
 
 - The Header panel lists every marker and callout on the board, with its name and kind. Choosing one
-  from the list selects it on the photo and opens its form. Drawing a new box, placing a callout and
-  dragging either one on the photo still need a pointer.
+  from the list selects it on the photo and opens its form. Drawing a new box, placing a callout,
+  dragging either one and resizing a box on the photo still need a pointer. With a marker or callout
+  selected, the arrow keys move it by one screen pixel, and `Shift` with an arrow key by ten.
+- On the photo, `+` and `-` zoom and `0` fits the photo to the panel. Each photo has a menu button
+  with **Rename**, **Rotate left**, **Rotate right** and **Remove photo**.
 - **Add photo** and **Import capture** are buttons you can Tab to; Enter or Space opens the file chooser.
+  You can also drop or paste an image on the photo.
+- `Ctrl+Z` undoes your last change to the board in this window, and `Ctrl+Shift+Z` or `Ctrl+Y` does it
+  again. The menu of the save chip has the same **Undo** and **Redo** items. In a text field, these keys
+  work on the text.
 - `Ctrl+Shift+P` opens the Panels menu. The menu lists every panel with its place: docked, in its own
   window or put away. From the menu you can show, move or put away a panel. The arrow keys, `Home`, `End`
   and the first letters of a panel's name move through the menu. Firefox keeps this shortcut for private

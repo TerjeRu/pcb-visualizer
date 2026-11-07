@@ -1,4 +1,4 @@
-// The Settings dialog: guidance and theme, the assistant switch, and the git switch with its setup steps.
+// The Settings dialog: the theme, the assistant switch, and the git switch with its setup steps.
 // The assistant's profile form lives in this dialog too, but assistantview.js owns it. Text from the
 // service (paths, addresses, command output) is only set with textContent.
 
@@ -107,8 +107,6 @@ export function createSettingsView(doc, handlers) {
   dialog.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal) { event.preventDefault(); close(); } });
   dialog.addEventListener('close', () => { $('settings-open').focus(); });
 
-  $('settings-guidance').addEventListener('change', (event) => handlers.onSetGuidance?.(event.target.value));
-
   /** A switch that saves a setting; when the service refuses, it goes back and says why. */
   async function toggle(box, key, message) {
     const wanted = box.checked;
@@ -204,7 +202,6 @@ export function createSettingsView(doc, handlers) {
     open,
     close,
     isOpen: () => dialog.open,
-    setGuidance(value) { $('settings-guidance').value = value; },
     setTutorial(info) {
       tutorial = { state: info.state ?? 'new', step: info.step ?? 1 };
       drawTutorial();

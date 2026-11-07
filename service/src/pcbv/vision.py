@@ -6,7 +6,8 @@ means the same as one read off the overview, and converts to pixels in the commi
 what markers and callouts use.
 
 Close-ups are cut from the original in `assets/photos/originals/` when it is there, since chip markings
-are often unreadable in the 2560-pixel copy. The original is turned upright the same way the copy was.
+are often unreadable in the 2560-pixel copy. The original is turned upright the same way the copy was,
+then by the photo's `rotation` when it was turned in the app.
 """
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .limits import VISION_CACHE_BYTES, ByteLru
-from .photos import open_image, resolve_file
+from .photos import CLOCKWISE, open_image, resolve_file
 
 CACHE_LONG_SIDE = 4096         # decoded photos are kept at most this big; 48 MP phone originals are not held whole
 VIEW_LONG_SIDE = 1568          # model servers scale larger images down anyway; this keeps the cost predictable
@@ -122,12 +123,17 @@ def render_view(board_dir: Path, asset: dict, region: dict | None = None) -> tup
     source = source or resolve_file(board_dir, asset.get("path") or "")
     if source is None:
         raise VisionError("the file for this photo is missing")
+    # The original is never turned on disk; a photo turned in the app records its quarter turns.
+    turn = asset.get("rotation", 0) if kind == "original" else 0
     with source.open() as handle:
         stat = os.fstat(handle.fileno())
-        key = (str(board_dir), kind, asset.get("id"), stat.st_size, stat.st_mtime_ns)
+        key = (str(board_dir), kind, asset.get("id"), stat.st_size, stat.st_mtime_ns, turn)
         cached = _decoded.get(key)
         if cached is None:
             cached = _upright(handle)
+            if turn in CLOCKWISE:
+                image, (across, down) = cached
+                cached = image.transpose(CLOCKWISE[turn]), ((down, across) if turn != 180 else (across, down))
             _decoded.put(key, cached)
     upright, (across, down) = cached
     box = (round(upright.width * x / 100), round(upright.height * y / 100),

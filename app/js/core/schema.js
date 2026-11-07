@@ -120,6 +120,42 @@ export function movedRect(marker, dx, dy, width, height) {
   };
 }
 
+/** Move a callout's dot and label together by (dx, dy), as far as both stay inside the image. */
+export function nudgedCallout(c, dx, dy, width, height) {
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(hi, lo));
+  const mx = clamp(dx, -Math.min(c.x, c.lx), width - Math.max(c.x, c.lx));
+  const my = clamp(dy, -Math.min(c.y, c.ly), height - Math.max(c.y, c.ly));
+  return { x: Math.round(c.x + mx), y: Math.round(c.y + my), lx: Math.round(c.lx + mx), ly: Math.round(c.ly + my) };
+}
+
+/**
+ * True when a callout label grows to the left of its anchor `lx`: a label left of its dot does, unless
+ * it would leave the photo and fits on the other side. A turned photo can put a label at either edge.
+ */
+export function growsLeft(lx, x, width, photoWidth) {
+  const left = lx < x;
+  if (left && lx - width < 0 && lx + width <= photoWidth) return false;
+  if (!left && lx + width > photoWidth && lx - width >= 0) return true;
+  return left;
+}
+
+export const RESIZE_HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+
+/**
+ * Drag a handle of a box by (dx, dy). The box stays inside the image and keeps at least `min` pixels on
+ * each side. A handle that passes the opposite edge stops there; the box does not flip.
+ */
+export function resizedRect(origin, handle, dx, dy, width, height, min = 6) {
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(hi, lo));
+  let left = origin.x, top = origin.y, right = origin.x + origin.w, bottom = origin.y + origin.h;
+  if (handle.includes('w')) left = clamp(left + dx, 0, right - min);
+  if (handle.includes('e')) right = clamp(right + dx, left + min, width);
+  if (handle.includes('n')) top = clamp(top + dy, 0, bottom - min);
+  if (handle.includes('s')) bottom = clamp(bottom + dy, top + min, height);
+  const x = Math.round(left), y = Math.round(top);
+  return { x, y, w: Math.round(right) - x, h: Math.round(bottom) - y };
+}
+
 /**
  * A new callout at (x, y): the label goes up and to the right, or the other way near the photo's edges.
  * The label stays inside the photo on all four sides; a photo too small to flip into gets it clamped.

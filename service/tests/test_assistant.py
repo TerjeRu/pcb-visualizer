@@ -497,6 +497,15 @@ def call(ctx, name, **args):
     return json.loads(run_tool(ctx, name, args))["data"]
 
 
+def test_a_photo_without_a_side_is_found_by_default_and_by_label(ctx):
+    from pcbv.assistant_tools import _find_photo
+    project = {"assets": [{"id": "img_a", "label": "Case"}, {"id": "img_b", "label": "Top"}]}
+    assert _find_photo(project, None)["id"] == "img_a"
+    assert _find_photo(project, "top")["id"] == "img_b"
+    project["assets"].append({"id": "img_c", "label": "Old", "side": "front"})
+    assert _find_photo(project, "")["id"] == "img_c"
+
+
 def test_get_board_is_a_compact_summary(ctx):
     data = call(ctx, "get_board")
     assert data["name"] == "Nimbus" and "mode" not in data and [p["id"] for p in data["photos"]] == ["img"]
@@ -1391,3 +1400,17 @@ def test_the_budget_sets_the_rounds_and_reply_limit(env, budget, rounds, tokens)
     sent = env.model.requests[before:]
     assert len(sent) == rounds + 1 and all(r["body"]["max_tokens"] == tokens for r in sent)
     assert sent[-1]["body"]["tool_choice"] == "none"
+
+
+def test_tool_errors_name_what_is_missing_and_never_say_none(ctx):
+    missing = call(ctx, "get_capture")
+    assert missing["error"] == "no capture given" and missing["available"] == ["cap_a"]
+    assert call(ctx, "get_capture", id="cap_zzz")["error"] == "no capture 'cap_zzz'"
+    assert call(ctx, "explain_step")["error"] == "no playbook given"
+    assert call(ctx, "explain_step", playbook="find-uart", step="  ")["error"] == "no step given"
+    assert call(ctx, "explain_step", playbook="find-uart", step="zzz")["error"] == "no step 'zzz'"
+    ctx.suggest = lambda request: {}
+    assert call(ctx, "suggest_pin_roles")["error"].startswith("no header given;")
+    assert "no header 'zzz';" in call(ctx, "suggest_pin_roles", header="zzz")["error"]
+    for name, args in (("get_capture", {}), ("explain_step", {}), ("suggest_pin_roles", {}), ("view_photo", {"header": " "})):
+        assert "None" not in json.dumps(call(ctx, name, **args))

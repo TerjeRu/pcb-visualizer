@@ -15,7 +15,17 @@ for (const [name, operation] of [['creation', createBoard], ['photo upload', upl
   });
 }
 
-import { mintCode, redeemCode } from '../js/api.js';
+import { mintCode, redeemCode, rotatePhoto } from '../js/api.js';
+
+test('rotating a photo posts the turn for that photo with the token', async () => {
+  let sent;
+  const answer = await rotatePhoto({ baseUrl: 'http://x', token: 'tok', slug: 'nimbus', id: 'img a', turns: -1, fetchImpl: async (url, options) => {
+    sent = [url, options.method, options.headers.Authorization, options.body];
+    return new Response('{"event":{"type":"board/batch"}}', { status: 200 });
+  } });
+  assert.deepEqual(sent, ['http://x/api/boards/nimbus/assets/img%20a/rotate', 'POST', 'Bearer tok', '{"turns":-1}']);
+  assert.equal(answer.event.type, 'board/batch');
+});
 
 test('redeeming a code sends no Authorization header and returns the token', async () => {
   const seen = [];

@@ -48,12 +48,11 @@ test('the profile form moved from the Agent panel into the dialog', () => {
   assert.ok(doc.querySelector('#settings-dialog #theme-select'));
 });
 
-test('Guidance is saved through the app', () => {
-  const { doc, calls, dom } = setup();
-  const select = doc.getElementById('settings-guidance');
-  select.value = 'expert';
-  select.dispatchEvent(new dom.window.Event('change'));
-  assert.deepEqual(calls, [['guidance', 'expert']]);
+test('Guidance is set from the top bar only; Settings keeps Theme', () => {
+  const { doc } = setup();
+  assert.equal(doc.getElementById('settings-guidance'), null);
+  assert.ok(doc.querySelector('#settings-dialog #theme-select'));
+  assert.ok(doc.querySelector('.bar #guidance-expert'));
 });
 
 test('the assistant switch saves, and a refusal puts it back with the reason', async () => {

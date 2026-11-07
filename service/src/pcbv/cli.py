@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import secrets
 import signal
 import sys
@@ -412,8 +413,16 @@ def cmd_vdev(args) -> int:
             os.close(watch_fd)
 
 
+class _Parser(argparse.ArgumentParser):
+    # argparse 3.12 takes only a bare number such as -5 as a value, so `pcbv measure ... -3.3V` failed with
+    # a missing value. No pcbv option starts with a digit. Subparsers are made with this class too.
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._negative_number_matcher = re.compile(r"^-\.?\d")
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="pcbv", description="PCB Visualizer service and board tools")
+    parser = _Parser(prog="pcbv", description="PCB Visualizer service and board tools")
     parser.add_argument("--root", default=str(default_root()),
                         help="folder that holds the boards (default: $PCBV_BOARDS_ROOT or ~/hw/boards)")
     sub = parser.add_subparsers(dest="command", required=True)

@@ -14,6 +14,7 @@ from ..journal import StorageError
 from ..limits import BodyTooLarge, WorkBusy
 from .. import logic as logicmod
 from ..photos import PhotoError
+from ..reveal import NoFileManager
 
 
 class NotFound(LookupError):
@@ -27,6 +28,8 @@ def error(status: int, code: str, message: str) -> JSONResponse:
 def install_handlers(app: FastAPI) -> None:
     @app.exception_handler(OSError)
     async def filesystem_error(_: Request, exc: OSError):
+        if isinstance(exc, NoFileManager):
+            return error(501, "no_file_manager", str(exc))
         if isinstance(exc, BoardNotFound):
             return error(404, "not_found", str(exc))
         if isinstance(exc, FileExistsError):

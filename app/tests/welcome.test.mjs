@@ -266,7 +266,7 @@ test('the board list reads Choose a board while the Welcome covers an open board
   const { doc, view, calls } = setup({ onSelectBoard: (slug) => calls.push(['select', slug]) });
   view.setBoards(['camera', 'nimbus'], null);
   const select = doc.getElementById('board-select');
-  assert.deepEqual([...select.options].map((o) => o.textContent), ['Choose a board', 'camera', 'nimbus']);
+  assert.deepEqual([...select.options].map((o) => o.textContent), ['Choose a board', 'camera', 'nimbus', 'New board…']);
   assert.equal(select.value, '');
   select.value = 'camera';
   select.dispatchEvent(new doc.defaultView.Event('change'));
@@ -274,5 +274,51 @@ test('the board list reads Choose a board while the Welcome covers an open board
   view.setBoards([], null);
   assert.equal(select.options.length, 0, 'no placeholder in an empty list');
   view.setBoards(['camera'], 'camera');
-  assert.deepEqual([...select.options].map((o) => o.value), ['camera']);
+  assert.deepEqual([...select.options].map((o) => o.value), ['camera', '__new__']);
+});
+
+test('New board… swaps the list for the name form; Escape and Cancel bring the earlier board back', () => {
+  const { doc, view, calls, window } = setup({ onSelectBoard: (slug) => calls.push(['select', slug]) });
+  view.setBoards(['camera', 'nimbus'], 'nimbus');
+  const field = doc.getElementById('board-field'), form = doc.getElementById('new-board-form'), select = doc.getElementById('board-select');
+  const name = doc.getElementById('new-board-name');
+  assert.deepEqual([field.hidden, form.hidden], [false, true]);
+  select.value = '__new__';
+  select.dispatchEvent(new window.Event('change'));
+  assert.deepEqual([field.hidden, form.hidden], [true, false]);
+  assert.equal(doc.activeElement, name);
+  assert.equal(calls.some((c) => c[0] === 'select'), false, 'New board… does not open a board');
+  name.value = 'half typed';
+  name.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.deepEqual([field.hidden, form.hidden], [false, true]);
+  assert.equal(select.value, 'nimbus');
+  assert.equal(name.value, '');
+  assert.equal(doc.activeElement, select);
+  select.value = '__new__';
+  select.dispatchEvent(new window.Event('change'));
+  doc.getElementById('new-board-cancel').click();
+  assert.deepEqual([field.hidden, form.hidden], [false, true]);
+  assert.equal(select.value, 'nimbus');
+});
+
+test('with no boards the name form shows at once, and a new list closes it', () => {
+  const { doc, view } = setup();
+  const field = doc.getElementById('board-field'), form = doc.getElementById('new-board-form');
+  assert.deepEqual([field.hidden, form.hidden, doc.getElementById('new-board-cancel').hidden], [true, false, true], 'at the start');
+  view.setBoards(['camera'], 'camera');
+  assert.deepEqual([field.hidden, form.hidden], [false, true]);
+  view.setBoards([], null);
+  assert.deepEqual([field.hidden, form.hidden, doc.getElementById('new-board-cancel').hidden], [true, false, true]);
+  doc.getElementById('new-board-name').dispatchEvent(new doc.defaultView.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(form.hidden, false, 'nothing to go back to');
+});
+
+test('Create my first board and Skip open the name form when boards exist', async () => {
+  const { doc, view } = setup();
+  view.setBoards(['camera'], null);
+  view.showNoBoards();
+  view.setWelcome({ welcomed: false });
+  doc.getElementById('welcome-create').click();
+  assert.equal(doc.getElementById('new-board-form').hidden, false);
+  assert.equal(doc.activeElement, doc.getElementById('new-board-name'));
 });

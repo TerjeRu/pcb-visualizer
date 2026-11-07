@@ -61,7 +61,6 @@ test('events apply in order and meta.modified follows the event time like on the
   assert.equal(h.client.state.seq, 3);
   assert.deepEqual(h.client.state.project.assets.map((a) => a.id), ['img_2', 'img_3']);
   assert.equal(h.client.state.project.meta.modified, '2026-10-25T10:00:03.000Z');
-  assert.deepEqual(h.client.state.feed.map((e) => e.seq), [2, 3]);
 });
 
 test('an event that arrives twice is applied once', () => {
@@ -70,7 +69,6 @@ test('an event that arrives twice is applied once', () => {
   socket.receive({ op: 'event', event: assetEvent(2) });
   socket.receive({ op: 'event', event: assetEvent(2) });
   assert.equal(h.client.state.project.assets.length, 1);
-  assert.equal(h.client.state.feed.length, 1);
   assert.equal(h.Socket.instances.length, 1, 'a harmless duplicate must not cost a reconnect');
   assert.equal(h.client.state.status, 'live');
 });
@@ -343,15 +341,6 @@ test('listeners are told about every change and can unsubscribe', () => {
   assert.deepEqual(seen, ['connecting', 'live']);
 });
 
-test('the event feed keeps only the most recent entries', () => {
-  const h = harness();
-  const socket = live(h);
-  for (let seq = 2; seq <= 260; seq += 1) socket.receive({ op: 'event', event: assetEvent(seq) });
-  assert.equal(h.client.state.feed.length, 200);
-  assert.equal(h.client.state.feed.at(-1).seq, 260);
-  assert.equal(h.client.state.project.assets.length, 259, 'the project still has every event applied');
-});
-
 test('after recovering from a resync the next drop goes back to a cheap resume', () => {
   const h = harness();
   const first = live(h, 1);
@@ -363,16 +352,6 @@ test('after recovering from a resync the next drop goes back to a cheap resume',
   h.clock.advance(500);
   h.last().open();
   assert.equal(h.last().sent[0].sinceSeq, 4, 'resume point is sent again once the copy is trusted');
-});
-
-test('a snapshot seeds the change feed with the recent events it carries', () => {
-  const h = harness();
-  h.client.connect();
-  h.last().open();
-  h.last().receive({ op: 'snapshot', seq: 2, project: baseProject(), recent: [{ seq: 1, type: 'project/created' }, { seq: 2, type: 'asset/added' }] });
-  assert.deepEqual(h.client.state.feed.map((e) => e.seq), [1, 2]);
-  h.last().receive({ op: 'snapshot', seq: 2, project: baseProject(), recent: 'junk' });
-  assert.deepEqual(h.client.state.feed, []);
 });
 
 test('a settings message goes to onSettings and leaves the project alone', () => {
@@ -423,4 +402,129 @@ test('unusable board reports recovery instructions and waits for an explicit reo
   assert.equal(h.client.state.status, 'rejected');
   assert.equal(h.client.state.error.message, message);
   assert.equal(h.clock.count(), 0);
+});
+
+const edit = { type: 'project/metaUpdated', patch: { notes: 'x' } };
+
+test('the save state starts empty and counts writes in flight', async () => {
+  const h = harness();
+  const socket = live(h);
+  assert.deepEqual(h.client.state.save, { pending: 0, at: null, error: null });
+  const first = h.client.apply(edit);
+  const second = h.client.apply(edit);
+  assert.equal(h.client.state.save.pending, 2);
+  socket.receive({ op: 'ack', id: socket.sent.at(-2).id, seq: 2 });
+  await first;
+  assert.equal(h.client.state.save.pending, 1);
+  socket.receive({ op: 'ack', id: socket.sent.at(-1).id, seq: 3 });
+  await second;
+  assert.equal(h.client.state.save.pending, 0);
+});
+
+test('a stored write sets the time and a refused one the reason, until the next success', async () => {
+  const h = harness();
+  const socket = live(h);
+  h.clock.advance(5000);
+  const stored = h.client.apply(edit);
+  socket.receive({ op: 'ack', id: socket.sent.at(-1).id, seq: 2 });
+  await stored;
+  assert.deepEqual(h.client.state.save, { pending: 0, at: 5000, error: null });
+  const refused = h.client.apply(edit);
+  socket.receive({ op: 'error', id: socket.sent.at(-1).id, code: 'invalid_event', message: 'No.' });
+  await assert.rejects(refused);
+  assert.deepEqual(h.client.state.save, { pending: 0, at: 5000, error: 'No.' });
+  h.clock.advance(1000);
+  const again = h.client.apply(edit);
+  socket.receive({ op: 'ack', id: socket.sent.at(-1).id, seq: 3 });
+  await again;
+  assert.deepEqual(h.client.state.save, { pending: 0, at: 6000, error: null });
+});
+
+test('a timeout and a write while not connected set the error', async () => {
+  const h = harness({ applyTimeoutMs: 3000 });
+  live(h);
+  const slow = h.client.apply(edit);
+  h.clock.advance(3000);
+  await assert.rejects(slow, (e) => e.code === 'timeout');
+  assert.equal(h.client.state.save.pending, 0);
+  assert.match(h.client.state.save.error, /./);
+  const closed = harness();
+  await assert.rejects(closed.client.apply(edit), (e) => e.code === 'not-connected');
+  assert.equal(closed.client.state.save.error, 'The app is not connected to the service.');
+});
+
+test('track follows a write outside the socket and passes its result on', async () => {
+  const h = harness();
+  live(h);
+  let finish;
+  const upload = h.client.track(new Promise((resolve) => { finish = resolve; }));
+  assert.equal(h.client.state.save.pending, 1);
+  finish('done');
+  assert.equal(await upload, 'done');
+  assert.deepEqual(h.client.state.save, { pending: 0, at: 0, error: null });
+  await assert.rejects(h.client.track(Promise.reject(new Error('Disk full.'))), /Disk full/);
+  assert.deepEqual(h.client.state.save, { pending: 0, at: 0, error: 'Disk full.' });
+});
+
+test('a snapshot or reconnect keeps the save state', async () => {
+  const h = harness();
+  const socket = live(h);
+  await assert.rejects(h.client.track(Promise.reject(new Error('Disk full.'))));
+  socket.serverClose();
+  h.clock.advance(5000);
+  h.last().open();
+  h.last().receive({ op: 'snapshot', seq: 1, project: baseProject() });
+  assert.equal(h.client.state.save.error, 'Disk full.');
+});
+
+test('around gives the board just before and just after an event, also when asked before it arrives', async () => {
+  const h = harness();
+  const socket = live(h);
+  const early = h.client.around(3);
+  socket.receive({ op: 'event', event: assetEvent(2) });
+  socket.receive({ op: 'event', event: assetEvent(3) });
+  const { before, after } = await early;
+  assert.deepEqual(before.assets.map((a) => a.id), ['img_2']);
+  assert.deepEqual(after.assets.map((a) => a.id), ['img_2', 'img_3']);
+  const late = await h.client.around(2);
+  assert.deepEqual(late.before.assets, []);
+});
+
+test('around answers null for an event older than the recent list or one a snapshot skipped', async () => {
+  const h = harness();
+  const socket = live(h);
+  for (let seq = 2; seq <= 70; seq += 1) socket.receive({ op: 'event', event: assetEvent(seq) });
+  assert.equal(await h.client.around(2), null);
+  assert.ok(await h.client.around(70));
+  const skipped = h.client.around(80);
+  socket.receive({ op: 'event', event: assetEvent(75) });          // a gap: resync
+  h.clock.advance(5000);
+  h.last().open();
+  h.last().receive({ op: 'snapshot', seq: 90, project: baseProject() });
+  assert.equal(await skipped, null);
+  assert.equal(await h.client.around(70), null, 'a snapshot forgets the recent events');
+});
+
+test('the state counts snapshots, so a resync can be told from a resume', () => {
+  const h = harness();
+  const socket = live(h);
+  assert.equal(h.client.state.snapshots, 1);
+  socket.serverClose(1006);
+  h.clock.advance(5000);
+  h.last().open();
+  h.last().receive({ op: 'ready', mode: 'resume', seq: 1 });
+  assert.equal(h.client.state.snapshots, 1);
+  h.client.refresh();
+  h.clock.advance(5000);
+  h.last().open();
+  h.last().receive({ op: 'snapshot', seq: 1, project: baseProject() });
+  assert.equal(h.client.state.snapshots, 2);
+});
+
+test('close answers waiting around calls with null', async () => {
+  const h = harness();
+  live(h);
+  const waiting = h.client.around(5);
+  h.client.close();
+  assert.equal(await waiting, null);
 });

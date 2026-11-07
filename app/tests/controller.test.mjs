@@ -39,17 +39,29 @@ function setup({ hash = '', stored = {}, boards = ['nimbus', 'router'], listErro
       if (api.uploadError) throw api.uploadError;
       return { event: { type: 'asset/added', asset: { id: 'img_new' } } };
     },
+    rotateError: null,
+    async rotatePhoto(args) {
+      api.calls.push(['rotate', args.slug, args.id, args.turns]);
+      if (api.rotateError) throw api.rotateError;
+      return { event: { type: 'board/batch', events: [] } };
+    },
+    async getBoard(args) { api.calls.push(['board', args.slug]); return { directory: `/home/t/hw/boards/${args.slug}` }; },
+    revealError: null,
+    async revealBoard(args) { api.calls.push(['reveal', args.slug]); if (api.revealError) throw api.revealError; return { opened: true }; },
+    async revealExport(args) { api.calls.push(['reveal-export', args.folder]); return { opened: true }; },
     async fetchFile(args) { api.calls.push(['file', args.slug, args.path]); return { blob: args.path }; },
   };
   const makeClient = ({ slug, token, onSettings }) => {
     const listeners = new Set();
     const client = {
       slug, token, onSettings, closed: false, connected: false, applied: [], applyResult: () => Promise.resolve({ seq: 2 }),
-      state: { status: 'live', project: project(), seq: 1, feed: [], error: null },
+      state: { status: 'live', project: project(), seq: 1, error: null },
       subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
       connect() { client.connected = true; },
       close() { client.closed = true; },
       apply(event) { client.applied.push(event); return client.applyResult(); },
+      tracked: 0,
+      track(promise) { client.tracked += 1; return promise; },
       push(patch) { client.state = { ...client.state, ...patch }; listeners.forEach((fn) => fn(client.state)); },
     };
     clients.push(client);
@@ -168,6 +180,30 @@ test('saving sends only the fields that changed', async () => {
   assert.deepEqual(client.applied, [{ type: 'project/metaUpdated', patch: { name: 'Nimbus 4', notes: 'UART at J3' } }]);
 });
 
+test('saving only the notes leaves the name and device alone, and says whether it worked', async () => {
+  const t = setup({ hash: '#code=abc' });
+  await t.controller.start();
+  const client = t.clients.at(-1);
+  assert.equal(await t.controller.saveDetails({ notes: 'UART at J3' }), true);
+  assert.deepEqual(client.applied, [{ type: 'project/metaUpdated', patch: { notes: 'UART at J3' } }]);
+  client.state.project.meta.notes = 'old';
+  assert.equal(await t.controller.saveDetails({ notes: '' }), true);
+  assert.deepEqual(client.applied.at(-1).patch, { notes: '' }, 'the notes can be emptied');
+  client.applyResult = () => Promise.reject(new ClientError('not-connected', 'Not connected to the service.'));
+  assert.equal(await t.controller.saveDetails({ notes: 'more' }), false);
+  assert.equal(await t.controller.saveDetails({ name: ' ' }), false);
+});
+
+test('unsaved notes are flushed to the board they belong to before the board is closed', async () => {
+  const t = setup({ hash: '#code=abc' });
+  await t.controller.start();
+  const flushed = t.calls('flushNotes').length;
+  t.controller.selectBoard('router');
+  assert.equal(t.calls('flushNotes').length, flushed + 1);
+  t.controller.stop();
+  assert.equal(t.calls('flushNotes').length, flushed + 2, 'closing the page flushes too');
+});
+
 test('an empty name is refused locally and the field is put back', async () => {
   const t = setup({ hash: '#code=abc' });
   await t.controller.start();
@@ -217,20 +253,50 @@ test('photos are fetched once per board and released when the board changes', as
   assert.deepEqual(t.env.urls.revoked, [first]);
 });
 
-test('uploading a photo names it after the file and reports the new asset', async () => {
+test('uploading a photo sends the file only, so the service names it, and reports the new asset', async () => {
   const t = setup({ hash: '#code=abc' });
   await t.controller.start();
-  const id = await t.controller.uploadPhoto({ name: 'IMG_2041.jpeg' }, 'back');
+  const id = await t.controller.uploadPhoto({ name: 'IMG_2041.jpeg' });
   assert.equal(id, 'img_new');
-  assert.deepEqual(t.api.calls.at(-1), ['upload', 'nimbus', 'back', 'IMG_2041']);
+  assert.deepEqual(t.api.calls.at(-1), ['upload', 'nimbus', undefined, undefined]);
 });
 
 test('a refused upload shows the service reason', async () => {
   const t = setup({ hash: '#code=abc' });
   await t.controller.start();
   t.api.uploadError = new ApiError(422, 'invalid_photo', 'not a readable image');
-  assert.equal(await t.controller.uploadPhoto({ name: 'x.gif' }, 'front'), null);
+  assert.equal(await t.controller.uploadPhoto({ name: 'x.gif' }), null);
   assert.deepEqual(t.calls('showError').at(-1), ['showError', 'not a readable image']);
+});
+
+test('a photo over the upload limit shows the service message, for a dropped file as for Add photo', async () => {
+  const t = setup({ hash: '#code=abc' });
+  await t.controller.start();
+  t.api.uploadError = new ApiError(413, 'too_large', 'The request is larger than 40 MB.');
+  assert.equal(await t.controller.uploadPhoto({ name: 'big.jpg', type: 'image/jpeg' }), null);
+  assert.deepEqual(t.calls('showError').at(-1), ['showError', 'The request is larger than 40 MB.']);
+});
+
+test('rotating a photo asks the service to turn it and counts as a change in flight', async () => {
+  const t = setup({ hash: '#code=abc' });
+  await t.controller.start();
+  assert.equal(await t.controller.rotatePhoto('img_1', 1), true);
+  assert.deepEqual(t.api.calls.at(-1), ['rotate', 'nimbus', 'img_1', 1]);
+  assert.equal(t.clients.at(-1).tracked, 1);
+  assert.equal(await t.controller.rotatePhoto('img_1', -1), true);
+  assert.deepEqual(t.api.calls.at(-1), ['rotate', 'nimbus', 'img_1', -1]);
+});
+
+test('a refused rotation shows the service reason, and a read-only board sends nothing', async () => {
+  const t = setup({ hash: '#code=abc' });
+  await t.controller.start();
+  t.api.rotateError = new ApiError(409, 'conflict', 'The photo changed while it was rotated. Try again.');
+  assert.equal(await t.controller.rotatePhoto('img_1', 1), false);
+  assert.deepEqual(t.calls('showError').at(-1), ['showError', 'The photo changed while it was rotated. Try again.']);
+  t.clients.at(-1).push({ storage: { writable: false } });
+  const sent = t.api.calls.length;
+  assert.equal(await t.controller.rotatePhoto('img_1', 1), false);
+  assert.equal(t.api.calls.length, sent);
 });
 
 test('addMarker sends one marker/added with its header and returns the marker id', async () => {
@@ -395,7 +461,7 @@ test('a failure that arrives after another board was chosen shows nothing', asyn
   await t.controller.start();
   const slow = deferred();
   t.api.uploadPhoto = () => slow.promise;
-  const upload = t.controller.uploadPhoto({ name: 'x.jpg' }, 'front');
+  const upload = t.controller.uploadPhoto({ name: 'x.jpg' });
   t.controller.selectBoard('router');
   slow.reject(new ApiError(422, 'invalid_photo', 'not a readable image'));
   assert.equal(await upload, null);
@@ -407,7 +473,7 @@ test('an upload that finishes for the previous board does not report its asset',
   await t.controller.start();
   const slow = deferred();
   t.api.uploadPhoto = () => slow.promise;
-  const upload = t.controller.uploadPhoto({ name: 'x.jpg' }, 'front');
+  const upload = t.controller.uploadPhoto({ name: 'x.jpg' });
   t.controller.selectBoard('router');
   slow.resolve({ event: { asset: { id: 'img_old' } } });
   assert.equal(await upload, null);
@@ -432,7 +498,7 @@ test('a rejected token still signs out when the answer arrives late', async () =
   await t.controller.start();
   const slow = deferred();
   t.api.uploadPhoto = () => slow.promise;
-  const upload = t.controller.uploadPhoto({ name: 'x.jpg' }, 'front');
+  const upload = t.controller.uploadPhoto({ name: 'x.jpg' });
   t.controller.selectBoard('router');
   slow.reject(new ApiError(401, 'unauthorized', 'bad token'));
   await upload;
@@ -618,6 +684,8 @@ test('while the tutorial runs a change outside the step is not sent and the coac
   assert.equal(await t.controller.openSerial({ path: 'x' }, 9600), false);
   assert.equal(await t.controller.writeSerial({ line: 'x' }), null);
   assert.equal(await t.controller.importLogic({}, 'a', ''), null);
+  assert.equal(await t.controller.rotatePhoto('as_1', 1), false);
+  assert.equal(t.api.calls.filter((c) => c[0] === 'rotate').length, 0);
 });
 
 test('Detect does nothing while the tutorial runs and works again after it', async () => {
@@ -797,4 +865,233 @@ test('outside the tutorial the logic panel imports, decodes and compares as befo
   assert.ok(await t.controller.importLogic({}, 'a.sr', ''));
   assert.ok(await t.controller.logicDecode('c', 0, 0));
   assert.ok(await t.controller.logicCompare('c', 0, 'd'));
+});
+
+test('an upload and a logic import are followed by the client for the save chip', async () => {
+  const t = setup({ hash: '#code=abc' });
+  t.api.importLogic = async () => ({ event: {} });
+  await t.controller.start();
+  await t.controller.uploadPhoto({ name: 'a.jpg' }, 'front');
+  assert.equal(t.clients.at(-1).tracked, 1);
+  await t.controller.importLogic({}, 'cap', '');
+  assert.equal(t.clients.at(-1).tracked, 2);
+});
+
+test('the board folder is read from the service, and opening it asks the service for that board', async () => {
+  const t = setup({ hash: '#code=abc' });
+  await t.controller.start();
+  assert.equal(await t.controller.boardFolder(), '/home/t/hw/boards/nimbus');
+  await t.controller.revealBoard();
+  assert.deepEqual(t.api.calls.at(-1), ['reveal', 'nimbus']);
+  await t.controller.revealExport('/home/t/pcbv-exports/nimbus-1');
+  assert.deepEqual(t.api.calls.at(-1), ['reveal-export', '/home/t/pcbv-exports/nimbus-1']);
+});
+
+test('a folder that cannot be opened shows the service reason', async () => {
+  const t = setup({ hash: '#code=abc' });
+  t.api.revealError = new ApiError(501, 'no_file_manager', 'The file manager could not be started.');
+  await t.controller.start();
+  await t.controller.revealBoard();
+  assert.deepEqual(t.calls('showError').at(-1), ['showError', 'The file manager could not be started.']);
+});
+
+test('the tutorial refuses opening a folder in every step', async () => {
+  const { allowedAction } = await import('../js/core/tutorial/policy.js');
+  for (let step = 0; step < 25; step += 1) assert.equal(allowedAction(step, 'reveal'), false);
+});
+
+test('the tutorial refuses rotating a photo in every step', async () => {
+  const { ACTION_NAMES, allowedAction } = await import('../js/core/tutorial/policy.js');
+  assert.ok(ACTION_NAMES.includes('photo-rotate'));
+  for (let step = 0; step < 25; step += 1) assert.equal(allowedAction(step, 'photo-rotate'), false);
+});
+
+// Undo and redo. The fake client stores each event with the real reducer, like the service would.
+async function undoSetup() {
+  const { reduceProject } = await import('../js/core/apply.js');
+  const t = setup({ hash: '#code=abc' });
+  await t.controller.start();
+  const client = t.clients.at(-1);
+  const recent = new Map();
+  client.state = { ...client.state, snapshots: 1, project: { ...project(), assets: [{ id: 'img_1', path: 'assets/a.jpg', label: 'Front' }], markers: [{ id: 'mk_1', assetId: 'img_1', schematicId: 'sch_1', x: 10, y: 20, label: '' }], schematics: [{ id: 'sch_1', rows: 1, cols: 4, pins: [] }] } };
+  client.store = (event) => {
+    const before = client.state.project;
+    const seq = client.state.seq + 1;
+    client.push({ project: reduceProject(before, event), seq });
+    recent.set(seq, { before, after: client.state.project });
+    return seq;
+  };
+  client.applyResult = () => Promise.resolve({ seq: client.store(client.applied.at(-1)) });
+  client.around = async (seq) => recent.get(seq) ?? null;
+  return { ...t, client, marker: () => client.state.project.markers[0] };
+}
+
+test('Ctrl+Z puts back what this window changed, and redo does it again', async () => {
+  const t = await undoSetup();
+  await t.controller.send({ type: 'marker/updated', id: 'mk_1', patch: { x: 99, label: 'J2' } });
+  await settled();
+  assert.deepEqual(t.controller.historyLabels(), { undo: 'Header labelled J2', redo: null });
+  await t.controller.undo();
+  await settled();
+  assert.deepEqual(t.client.applied.at(-1), { type: 'marker/updated', id: 'mk_1', patch: { x: 10, label: '' } });
+  assert.equal(t.marker().x, 10);
+  assert.deepEqual(t.controller.historyLabels(), { undo: null, redo: 'Header labelled J2' });
+  await t.controller.redo();
+  await settled();
+  assert.equal(t.marker().x, 99);
+  assert.deepEqual(t.controller.historyLabels(), { undo: 'Header labelled J2', redo: null });
+});
+
+test('a change the timeline has no line for is still undone, without a name', async () => {
+  const t = await undoSetup();
+  await t.controller.send({ type: 'marker/updated', id: 'mk_1', patch: { x: 50 } });
+  await settled();
+  assert.deepEqual(t.controller.historyLabels(), { undo: '', redo: null }, 'no name, but there is a step');
+  await t.controller.undo();
+  await settled();
+  assert.equal(t.marker().x, 10);
+});
+
+test('an undo is refused when the change was changed again from elsewhere, and the entry is dropped', async () => {
+  const t = await undoSetup();
+  await t.controller.send({ type: 'marker/updated', id: 'mk_1', patch: { label: 'J2' } });
+  await settled();
+  t.client.store({ type: 'marker/updated', id: 'mk_1', patch: { label: 'J9' } });       // the CLI
+  const sent = t.client.applied.length;
+  await t.controller.undo();
+  assert.equal(t.client.applied.length, sent, 'nothing is sent');
+  assert.deepEqual(t.calls('showError').at(-1), ['showError', 'Could not undo "Header labelled J2". It was changed after that.']);
+  assert.deepEqual(t.controller.historyLabels(), { undo: null, redo: null });
+});
+
+test('an undo the service refuses is dropped, and the reason is shown', async () => {
+  const t = await undoSetup();
+  await t.controller.send({ type: 'marker/updated', id: 'mk_1', patch: { label: 'J2' } });
+  await settled();
+  t.client.applyResult = () => Promise.reject(new ClientError('conflict', 'marker does not exist'));
+  await t.controller.undo();
+  assert.deepEqual(t.calls('showError').at(-1), ['showError', 'marker does not exist']);
+  assert.deepEqual(t.controller.historyLabels(), { undo: null, redo: null });
+});
+
+test('changes from other windows are not in the history', async () => {
+  const t = await undoSetup();
+  t.client.store({ type: 'marker/updated', id: 'mk_1', patch: { label: 'J2' } });
+  await settled();
+  await t.controller.undo();
+  assert.equal(t.client.applied.length, 0);
+});
+
+test('a resync and a board switch clear the history', async () => {
+  const t = await undoSetup();
+  await t.controller.send({ type: 'marker/updated', id: 'mk_1', patch: { label: 'J2' } });
+  await settled();
+  t.client.push({ snapshots: 1 });
+  assert.ok(t.controller.historyLabels().undo, 'the first snapshot does not count');
+  t.client.push({ snapshots: 2 });
+  assert.equal(t.controller.historyLabels().undo, null);
+  await t.controller.send({ type: 'marker/updated', id: 'mk_1', patch: { label: 'J3' } });
+  await settled();
+  t.controller.selectBoard('router');
+  assert.equal(t.controller.historyLabels().undo, null);
+});
+
+test('saved details and notes can be undone; a run of notes saves is one step', async () => {
+  const t = await undoSetup();
+  await t.controller.saveDetails({ device: 'Router' });
+  await t.controller.saveDetails({ notes: 'a' });
+  await t.controller.saveDetails({ notes: 'ab' });
+  await settled();
+  await t.controller.undo();
+  await settled();
+  assert.equal(t.client.state.project.meta.notes, '');
+  await t.controller.undo();
+  await settled();
+  assert.equal(t.client.state.project.meta.device, 'Acme');
+});
+
+test('an uploaded photo is undone by removing it, once the client has the stored event', async () => {
+  const t = await undoSetup();
+  t.api.uploadPhoto = async () => {
+    const event = { type: 'asset/added', asset: { id: 'img_new', path: 'assets/photos/img_new.jpg', label: 'Photo 2' } };
+    return { event: { ...event, seq: t.client.store(event) } };
+  };
+  assert.equal(await t.controller.uploadPhoto({ name: 'b.jpg' }), 'img_new');
+  await settled();
+  assert.equal(t.controller.historyLabels().undo, 'Photo added: Photo 2');
+  await t.controller.undo();
+  await settled();
+  assert.deepEqual(t.client.applied.at(-1), { type: 'asset/removed', id: 'img_new' });
+});
+
+test('undo and redo do nothing in the tutorial and record nothing there', async () => {
+  const t = tutorialSetup({ stored: { 'pcbv.board': 'nimbus' } });
+  await t.controller.start();
+  await settled();
+  await t.controller.startTutorial();
+  const practice = t.clients.at(-1);
+  practice.push({ project: practiceProject() });
+  practice.around = async () => ({ before: practiceProject(), after: practiceProject() });
+  await t.controller.send({ type: 'project/metaUpdated', patch: { name: 'x' } });
+  await settled();
+  assert.deepEqual(t.controller.historyLabels(), { undo: null, redo: null });
+  const sent = practice.applied.length;
+  await t.controller.undo();
+  await t.controller.redo();
+  assert.equal(practice.applied.length, sent);
+});
+
+test('two quick Ctrl+Z presses undo two changes, in order', async () => {
+  const t = await undoSetup();
+  await t.controller.send({ type: 'marker/updated', id: 'mk_1', patch: { label: 'J2' } });
+  await t.controller.send({ type: 'marker/updated', id: 'mk_1', patch: { label: 'J3' } });
+  await settled();
+  await Promise.all([t.controller.undo(), t.controller.undo()]);
+  await settled();
+  assert.equal(t.marker().label, '');
+  assert.deepEqual(t.controller.historyLabels(), { undo: null, redo: 'Header labelled J2' });
+});
+
+test('Ctrl+Z during an upload waits for it and undoes the upload, not the change before', async () => {
+  const t = await undoSetup();
+  await t.controller.send({ type: 'marker/updated', id: 'mk_1', patch: { label: 'J2' } });
+  await settled();
+  let finish;
+  t.api.uploadPhoto = () => new Promise((resolve) => { finish = resolve; });
+  const upload = t.controller.uploadPhoto({ name: 'b.jpg' });
+  await settled();
+  const undo = t.controller.undo();
+  const event = { type: 'asset/added', asset: { id: 'img_new', path: 'assets/photos/img_new.jpg', label: 'Photo 2' } };
+  finish({ event: { ...event, seq: t.client.store(event) } });
+  await upload;
+  await undo;
+  await settled();
+  assert.deepEqual(t.client.applied.at(-1), { type: 'asset/removed', id: 'img_new' });
+  assert.equal(t.marker().label, 'J2');
+});
+
+test('without a connection the undo is not sent and stays in the history', async () => {
+  const t = await undoSetup();
+  await t.controller.send({ type: 'marker/updated', id: 'mk_1', patch: { label: 'J2' } });
+  await settled();
+  t.client.push({ status: 'reconnecting' });
+  const sent = t.client.applied.length;
+  await t.controller.undo();
+  assert.equal(t.client.applied.length, sent);
+  assert.deepEqual(t.calls('showError').at(-1), ['showError', 'The app is not connected to the service, so nothing was undone.']);
+  assert.equal(t.controller.historyLabels().undo, 'Header labelled J2');
+});
+
+test('a change the tutorial lets through is not recorded for undo', async () => {
+  const t = tutorialSetup({ stored: { 'pcbv.tutorial': '1' }, settings: { tutorial: 'started', tutorialStep: 3 } });
+  await t.controller.start();
+  await settled();
+  await settled();
+  const practice = t.clients.at(-1);
+  assert.equal(practice.slug, 'pcbv-tutorial');
+  practice.push({ project: practiceProject() });
+  practice.around = async () => ({ before: practiceProject(), after: practiceProject() });
+  assert.ok(await t.controller.addMarker('as_1', { x: 10, y: 20, w: 80, h: 20 }), 'step 3 allows a box');
+  await settled();
+  assert.deepEqual(t.controller.historyLabels(), { undo: null, redo: null });
 });

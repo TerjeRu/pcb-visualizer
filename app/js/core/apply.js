@@ -8,6 +8,16 @@
 const PIN_BASE_KEYS = new Set(['index', 'role', 'label', 'color', 'note']);
 const replaceById = (list, id, fn) => list.map((item) => (item.id === id ? fn(item) : item));
 
+/** The patch merged in, then the keys in `unset` removed (an undo of a patch that added them). */
+function patched(record, event) {
+  const merged = { ...record, ...event.patch };
+  for (const key of event.unset ?? []) delete merged[key];
+  return merged;
+}
+
+/** Appended, or put back at `at` (an undo of its removal). */
+const inserted = (list, item, at) => (at === undefined ? [...list, item] : [...list.slice(0, at), item, ...list.slice(at)]);
+
 const pinHasContent = (pin) =>
   Boolean(pin.role || pin.label || pin.color || pin.note || Object.keys(pin).some((key) => !PIN_BASE_KEYS.has(key)));
 
@@ -21,12 +31,12 @@ export function reduceProject(project, event) {
       return structuredClone(event.project);
 
     case 'project/metaUpdated':
-      return { ...project, meta: { ...project.meta, ...event.patch } };
+      return { ...project, meta: patched(project.meta, event) };
 
     case 'asset/added':
-      return { ...project, assets: [...project.assets, event.asset] };
+      return { ...project, assets: inserted(project.assets, event.asset, event.at) };
     case 'asset/updated':
-      return { ...project, assets: replaceById(project.assets, event.id, (a) => ({ ...a, ...event.patch })) };
+      return { ...project, assets: replaceById(project.assets, event.id, (a) => patched(a, event)) };
     case 'asset/removed': {
       const markers = project.markers.filter((m) => m.assetId !== event.id);
       const used = new Set(markers.map((m) => m.schematicId));
@@ -47,20 +57,20 @@ export function reduceProject(project, event) {
       return { ...project, captures: replaceById(project.captures ?? [], event.id, (c) => ({ ...c, ...event.patch })) };
 
     case 'annotation/added':
-      return { ...project, annotations: [...(project.annotations ?? []), event.annotation] };
+      return { ...project, annotations: inserted(project.annotations ?? [], event.annotation, event.at) };
     case 'annotation/updated':
-      return { ...project, annotations: replaceById(project.annotations ?? [], event.id, (a) => ({ ...a, ...event.patch })) };
+      return { ...project, annotations: replaceById(project.annotations ?? [], event.id, (a) => patched(a, event)) };
     case 'annotation/removed':
       return { ...project, annotations: (project.annotations ?? []).filter((a) => a.id !== event.id) };
 
     case 'marker/added':
       return {
         ...project,
-        markers: [...project.markers, event.marker],
-        schematics: event.schematic ? [...project.schematics, event.schematic] : project.schematics,
+        markers: inserted(project.markers, event.marker, event.at),
+        schematics: event.schematic ? inserted(project.schematics, event.schematic, event.schematicAt) : project.schematics,
       };
     case 'marker/updated':
-      return { ...project, markers: replaceById(project.markers, event.id, (m) => ({ ...m, ...event.patch })) };
+      return { ...project, markers: replaceById(project.markers, event.id, (m) => patched(m, event)) };
     case 'marker/removed': {
       const marker = project.markers.find((m) => m.id === event.id);
       if (!marker) return project;
@@ -74,7 +84,7 @@ export function reduceProject(project, event) {
     }
 
     case 'schematic/updated':
-      return { ...project, schematics: replaceById(project.schematics, event.id, (s) => ({ ...s, ...event.patch })) };
+      return { ...project, schematics: replaceById(project.schematics, event.id, (s) => patched(s, event)) };
 
     case 'pin/readingAdded': {
       const schematic = project.schematics.find((s) => s.id === event.schematicId);
@@ -105,12 +115,22 @@ export function reduceProject(project, event) {
 
     case 'playbook/updated': {
       // Progress per playbook; with stepId the patch merges into that step, otherwise into the playbook.
-      const all = project.playbooks ?? {};
+      // With unset, what it leaves empty is removed: an undo of a first tick leaves no trace.
+      const all = { ...(project.playbooks ?? {}) };
       const record = all[event.playbookId] ?? {};
-      const next = event.stepId
-        ? { ...record, steps: { ...(record.steps ?? {}), [event.stepId]: { ...(record.steps?.[event.stepId] ?? {}), ...event.patch } } }
-        : { ...record, ...event.patch };
-      return { ...project, playbooks: { ...all, [event.playbookId]: next } };
+      const pruning = 'unset' in event;
+      let next;
+      if (event.stepId) {
+        const steps = { ...(record.steps ?? {}), [event.stepId]: patched(record.steps?.[event.stepId] ?? {}, event) };
+        if (pruning && !Object.keys(steps[event.stepId]).length) delete steps[event.stepId];
+        next = { ...record, steps };
+        if (pruning && !Object.keys(steps).length) delete next.steps;
+      } else {
+        next = patched(record, event);
+      }
+      if (pruning && !Object.keys(next).length) delete all[event.playbookId];
+      else all[event.playbookId] = next;
+      return { ...project, playbooks: all };
     }
 
     default:

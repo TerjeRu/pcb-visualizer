@@ -9,12 +9,12 @@
 import { PROTOCOL_VERSION, UNCERTAIN_OPERATION } from './session.js';
 import { applyEvent } from './core/apply.js';
 
-const MAX_FEED = 200;
 const OPEN = 1; // WebSocket.OPEN
 const BACKOFF_MS = [250, 500, 1000, 2000, 5000];
 // A connection counts as healthy again only after it stayed up this long, so a service that accepts the
 // socket and drops it at once keeps backing off.
 const STABLE_MS = 60_000;
+const RECENT_EVENTS = 64;     // how far back undo can look up the board before an event this window sent
 // Close codes the service uses to say "do not retry, something is wrong with this connection".
 const REFUSED = {
   4409: 'The client and service protocols do not match. Reload the app.',
@@ -47,6 +47,8 @@ export class BoardClient {
   #closed = false;
   #socket = null;
   #liveSince = null;
+  #recent = new Map();            // seq -> {before, after} for the last RECENT_EVENTS events, for undo
+  #waiting = new Map();           // seq -> resolvers of around(seq)
 
   constructor({
     baseUrl, token, slug, actor = 'web',
@@ -61,7 +63,7 @@ export class BoardClient {
   }) {
     Object.assign(this, { baseUrl, token, slug, actor, WebSocketImpl, setTimer, clearTimer, applyTimeoutMs, now, random, onSerial, onSettings });
     this.wsUrl = `${baseUrl.replace(/^http/, 'ws')}/api/boards/${encodeURIComponent(slug)}/ws`;
-    this.state = { status: 'idle', project: null, seq: 0, feed: [], error: null };
+    this.state = { status: 'idle', project: null, seq: 0, error: null, snapshots: 0, save: { pending: 0, at: null, error: null } };
   }
 
   /** Register a listener called with the new state after every change. Returns an unsubscribe function. */
@@ -77,14 +79,32 @@ export class BoardClient {
 
   close() {
     this.#closed = true;
+    this.#forgetRecent();
     this.#clearTimer();
     this.#rejectAll(new ClientError('closed', 'The connection was closed.'));
     this.#detach()?.close();
     this.#set({ status: 'closed' });
   }
 
+  /**
+   * Follow a write for the save state: `pending` counts writes in flight, `at` is when the last one
+   * succeeded and `error` why the last one failed, until a later write succeeds. Passes the result on.
+   */
+  track(promise) {
+    const change = (patch) => this.#set({ save: { ...this.state.save, ...patch } });
+    change({ pending: this.state.save.pending + 1 });
+    return promise.then(
+      (value) => { change({ pending: this.state.save.pending - 1, at: this.now(), error: null }); return value; },
+      (error) => { change({ pending: this.state.save.pending - 1, error: String(error?.message || error) }); throw error; },
+    );
+  }
+
   /** Send an edit. Resolves with {seq} once the service has stored it, rejects with ClientError otherwise. */
   apply(event) {
+    return this.track(this.#send(event));
+  }
+
+  #send(event) {
     const socket = this.#socket;
     if (this.state.storage?.writable === false) return Promise.reject(new ClientError('recovery_required', 'Reopen the board before writing.'));
     if (this.state.status !== 'live' || !socket || socket.readyState !== OPEN) {
@@ -104,6 +124,22 @@ export class BoardClient {
   }
 
   refresh() { this.#resync('refreshing board state'); }
+
+  /**
+   * The board just before and just after the stored event `seq`, once this copy has it: {before, after}.
+   * Null when a snapshot replaced the copy first, the client closed, or the event is too old.
+   */
+  around(seq) {
+    if (this.#recent.has(seq)) return Promise.resolve(this.#recent.get(seq));
+    if (this.#closed || seq <= this.state.seq) return Promise.resolve(null);
+    return new Promise((resolve) => this.#waiting.set(seq, [...(this.#waiting.get(seq) ?? []), resolve]));
+  }
+
+  #forgetRecent() {
+    this.#recent.clear();
+    for (const resolvers of this.#waiting.values()) for (const resolve of resolvers) resolve(null);
+    this.#waiting.clear();
+  }
 
   #open() {
     const resume = Boolean(this.state.project) && !this.#forceSnapshot;
@@ -188,7 +224,8 @@ export class BoardClient {
       case 'snapshot':
         this.#forceSnapshot = false;
         this.#liveSince ??= this.now();
-        this.#set({ status: 'live', project: message.project, seq: message.seq, storage: message.storage ?? { writable: true, warnings: [] }, feed: Array.isArray(message.recent) ? message.recent.slice(-MAX_FEED) : [], error: null });
+        this.#forgetRecent();
+        this.#set({ status: 'live', project: message.project, seq: message.seq, storage: message.storage ?? { writable: true, warnings: [] }, error: null, snapshots: this.state.snapshots + 1 });
         break;
       case 'ready':
         if (!this.state.project || message.seq < this.state.seq) {
@@ -249,7 +286,12 @@ export class BoardClient {
       this.#resync(String(error.message || error));
       return;
     }
-    this.#set({ project, seq: event.seq, feed: [...this.state.feed, event].slice(-MAX_FEED) });
+    const before = this.state.project;
+    this.#set({ project, seq: event.seq });
+    this.#recent.set(event.seq, { before, after: project });
+    if (this.#recent.size > RECENT_EVENTS) this.#recent.delete(this.#recent.keys().next().value);
+    for (const resolve of this.#waiting.get(event.seq) ?? []) resolve({ before, after: project });
+    this.#waiting.delete(event.seq);
   }
 
   #settle(id, action) {

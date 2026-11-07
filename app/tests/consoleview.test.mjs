@@ -44,6 +44,20 @@ test('ports load, connect sends the choice, and output is drawn with highlights'
   assert.equal(doc.querySelectorAll('#serial-output div').length, 2);
 });
 
+test('the black screen is a short band until a session starts, stays tall for a finished log, and folds when cleared', () => {
+  const { doc, view } = setup();
+  const out = doc.getElementById('serial-output');
+  assert.equal(out.classList.contains('folded'), true, 'no session, nothing printed');
+  view.message({ op: 'serial', state: session, backlog: 'U-Boot 2015.07-ARC (x)\r\n' });
+  assert.equal(out.classList.contains('folded'), false, 'a session runs');
+  view.message({ op: 'serial', state: null });
+  assert.equal(out.classList.contains('folded'), false, 'the log of the finished session stays readable');
+  doc.getElementById('serial-clear').click();
+  assert.equal(out.classList.contains('folded'), true, 'nothing left to read');
+  view.message({ op: 'serial', state: session, backlog: '' });
+  assert.equal(out.classList.contains('folded'), false, 'a session runs, even before the first line');
+});
+
 test('typed lines and keys are sent, and the input clears after sending', async () => {
   const { doc, view, calls } = setup();
   view.message({ op: 'serial', state: session, backlog: '' });

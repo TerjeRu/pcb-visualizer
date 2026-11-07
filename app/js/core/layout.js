@@ -6,8 +6,8 @@
 export const PANELS = {
   board: 'Board',
   inspector: 'Header',
-  feed: 'Changes',
   photo: 'Photo',
+  notes: 'Notes',
   playbook: 'Playbook',
   wiki: 'Wiki',
   console: 'Console',
@@ -19,10 +19,10 @@ export const PANELS = {
 export const REGIONS = ['left', 'center', 'right', 'bottom'];
 const MODES = ['tabs', 'stack'];
 
-const DETACHED_IN_WALL = ['console', 'playbook', 'timeline', 'board', 'feed', 'wiki', 'terminal', 'logic', 'assistant'];
+const DETACHED_IN_WALL = ['console', 'playbook', 'timeline', 'board', 'wiki', 'terminal', 'logic', 'assistant', 'notes'];
 
 const learn = {
-  regions: { left: ['board', 'inspector', 'feed'], center: ['photo'], right: ['playbook', 'wiki', 'console', 'timeline', 'logic', 'terminal', 'assistant'], bottom: [] },
+  regions: { left: ['board', 'inspector'], center: ['photo', 'notes'], right: ['playbook', 'wiki', 'console', 'timeline', 'logic', 'terminal', 'assistant'], bottom: [] },
   active: { left: 'board', center: 'photo', right: 'playbook', bottom: null },
   modes: { left: 'stack', center: 'tabs', right: 'tabs', bottom: 'tabs' },
   detached: [],
@@ -43,7 +43,7 @@ function originsOf(panels) {
 export const PRESETS = {
   Learn: learn,
   Console: {
-    regions: { left: ['inspector', 'feed'], center: ['console', 'photo', 'terminal'], right: ['playbook', 'wiki', 'timeline', 'logic', 'assistant'], bottom: [] },
+    regions: { left: ['inspector'], center: ['console', 'photo', 'terminal'], right: ['playbook', 'wiki', 'notes', 'timeline', 'logic', 'assistant'], bottom: [] },
     active: { left: 'inspector', center: 'console', right: 'playbook', bottom: null },
     modes: { left: 'stack', center: 'tabs', right: 'tabs', bottom: 'tabs' },
     detached: ['board'],
@@ -51,7 +51,7 @@ export const PRESETS = {
     origins: originsOf(['board']),
   },
   Analysis: {
-    regions: { left: ['board', 'feed'], center: ['timeline', 'logic', 'photo'], right: ['wiki', 'playbook', 'assistant'], bottom: ['terminal', 'console'] },
+    regions: { left: ['board'], center: ['timeline', 'notes', 'logic', 'photo'], right: ['wiki', 'playbook', 'assistant'], bottom: ['terminal', 'console'] },
     active: { left: 'board', center: 'timeline', right: 'wiki', bottom: 'terminal' },
     modes: { left: 'stack', center: 'tabs', right: 'tabs', bottom: 'tabs' },
     detached: ['inspector'],

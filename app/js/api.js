@@ -164,6 +164,21 @@ export async function exportBoard({ baseUrl, token, slug, formats, redact, fetch
     { method: 'POST', body: JSON.stringify({ formats, redact }) }, fetchImpl);
 }
 
+export const getBoard = ({ baseUrl, token, slug, fetchImpl }) => call(baseUrl, token, `/api/boards/${encodeURIComponent(slug)}`, {}, fetchImpl);
+
+/** Open the board's folder in the file manager. Answers {opened}. */
+export const revealBoard = ({ baseUrl, token, slug, fetchImpl }) =>
+  call(baseUrl, token, `/api/boards/${encodeURIComponent(slug)}/reveal`, { method: 'POST', body: '{}' }, fetchImpl);
+
+/** Turn a photo by a quarter: turns 1 is right, -1 is left. The service moves what is drawn on it too. */
+export const rotatePhoto = ({ baseUrl, token, slug, id, turns, fetchImpl }) =>
+  call(baseUrl, token, `/api/boards/${encodeURIComponent(slug)}/assets/${encodeURIComponent(id)}/rotate`,
+    { method: 'POST', body: JSON.stringify({ turns }) }, fetchImpl);
+
+/** Open a folder an export returned. The service opens only a folder directly under the export root. */
+export const revealExport = ({ baseUrl, token, folder, fetchImpl }) =>
+  call(baseUrl, token, '/api/exports/reveal', { method: 'POST', body: JSON.stringify({ folder }) }, fetchImpl);
+
 export async function importLogic({ baseUrl, token, slug, file, name, samplerate = '', fetchImpl = globalThis.fetch }) {
   const query = new URLSearchParams({ name, samplerate });
   const response = await request(fetchImpl, `${baseUrl}/api/boards/${encodeURIComponent(slug)}/logic?${query}`, {
@@ -215,9 +230,8 @@ async function failure(response) {
 }
 
 /** Send a photo file as raw bytes. The service stores it and records an asset/added event. */
-export async function uploadPhoto({ baseUrl, token, slug, file, side = 'front', label = '', fetchImpl = globalThis.fetch }) {
-  const query = new URLSearchParams({ side, label });
-  const response = await request(fetchImpl, `${baseUrl}/api/boards/${encodeURIComponent(slug)}/assets?${query}`, {
+export async function uploadPhoto({ baseUrl, token, slug, file, fetchImpl = globalThis.fetch }) {
+  const response = await request(fetchImpl, `${baseUrl}/api/boards/${encodeURIComponent(slug)}/assets`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream', 'X-PCBV-Protocol': String(PROTOCOL_VERSION) },
     body: file,

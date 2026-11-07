@@ -264,11 +264,9 @@ class Board:
         On either, the event itself leaves no trace. An outside edit found on the way is still
         recorded (see _reconcile_snapshot), so callers should broadcast events_since(seq_before).
         """
-        if not self.writable:
-            raise StorageError("recovery_required", "Reopen the board before attempting another mutation")
         if not isinstance(actor, str) or not ACTOR_RE.match(actor):
             raise EventError("actor must be 1-32 chars of a-z, 0-9, '_' or '-'")
-        self._reconcile_snapshot()
+        self.latest_project()
         event = validate_event(raw, internal=internal)   # internal: events only the service may write
         # A script or an editor can still write project.pcb.json directly. Absorb any
         # such edit first, so it is recorded in the journal and the new event applies on top of it.
@@ -286,6 +284,13 @@ class Board:
         self._commit(stored, new_project)
         self._maintain_snapshot()
         return stored
+
+    def latest_project(self) -> Project:
+        """The project with any outside edit of project.pcb.json taken in, for a change built from it."""
+        if not self.writable:
+            raise StorageError("recovery_required", "Reopen the board before attempting another mutation")
+        self._reconcile_snapshot()
+        return self.project
 
     def _commit(self, stored: dict, project: Project) -> None:
         try:

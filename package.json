@@ -1,6 +1,6 @@
 {
   "name": "pcb-visualizer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Front end, tests and desktop tooling of PCB Visualizer, a local workbench for documenting the debug interfaces of hardware you own.",
   "type": "module",

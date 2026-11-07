@@ -39,6 +39,15 @@ def test_snapshot_and_live_state_always_equal_a_replay_of_the_journal(seeded):
     assert [e["actor"] for e in events[-3:]] == ["cli", "web", "agent"]
 
 
+def test_a_photo_label_has_at_most_80_characters(seeded):
+    seeded.apply({"type": "asset/updated", "id": "img_a", "patch": {"label": "x" * 80}}, "web")
+    assert seeded.project["assets"][0]["label"] == "x" * 80
+    for label in ("x" * 81, 5):
+        with pytest.raises(EventError, match="label"):
+            seeded.apply({"type": "asset/updated", "id": "img_a", "patch": {"label": label}}, "web")
+    assert seeded.project["assets"][0]["label"] == "x" * 80
+
+
 @pytest.mark.parametrize("bad, error", [
     ("not an object", EventError),
     ({"type": "firmware/dumped"}, EventError),
@@ -85,6 +94,14 @@ def test_rejected_events_change_nothing_on_disk_or_in_memory(seeded, bad, error)
 def test_actor_names_are_restricted(seeded, actor):
     with pytest.raises(EventError):
         seeded.apply({"type": "project/metaUpdated", "patch": {"notes": "x"}}, actor)
+
+
+def test_notes_have_a_size_limit(seeded):
+    seeded.apply({"type": "project/metaUpdated", "patch": {"notes": "n" * 100_000}}, "test")
+    seq, notes = seeded.seq, seeded.project["meta"]["notes"]
+    with pytest.raises(EventError, match="100000 characters"):
+        seeded.apply({"type": "project/metaUpdated", "patch": {"notes": "n" * 100_001}}, "test")
+    assert seeded.seq == seq and seeded.project["meta"]["notes"] == notes
 
 
 def test_client_cannot_inject_envelope_fields(seeded):

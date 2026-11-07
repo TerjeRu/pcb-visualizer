@@ -7,6 +7,7 @@ import { createPlaybookView } from './playbookview.js';
 import { createWikiView } from './wikiview.js';
 import { createConsoleView } from './consoleview.js';
 import { createTimelineView } from './timelineview.js';
+import { createNotesView } from './notesview.js';
 import { createDock, showSinglePanel } from './dock.js';
 import { createTerminalView } from './terminalview.js';
 import { createLogicView } from './logicview.js';
@@ -15,13 +16,16 @@ import { createSettingsView } from './settingsview.js';
 import { createWelcomeView } from './welcomeview.js';
 import { createTutorialView } from './tutorialview.js';
 import { createExportView } from './exportview.js';
+import { createStatusMenu } from './statusmenu.js';
 import { createPanelBus } from './panelbus.js';
 import { PANELS, tutorialLayout } from './core/layout.js';
-import { clock, describeEvent, statusLabel, summarize } from './viewmodel.js';
+import { chipModel, summarize } from './viewmodel.js';
 import { dom } from './dom.js';
-import { guessName } from './core/format.js';
+import { shortText } from './core/format.js';
+import { firstLine } from './core/notes.js';
 
 const MESSAGE_MS = 6000;
+const NEW_BOARD = '__new__';
 const THEMES = ['system', 'light', 'dark'];
 const ASK_LIMIT = 8000;
 const HELD_LIMIT = 4;
@@ -31,6 +35,7 @@ const PAYLOADS = {
   ask: (p) => typeof p.text === 'string' && p.text.length <= ASK_LIMIT && (p.context === undefined || isRecord(p.context)),
   wiki: (p) => typeof p.name === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(p.name),
   jump: (p) => isRecord(p.target) && typeof p.target.kind === 'string',
+  notes: () => true,
 };
 const NOTICE_TEXT = {
   timeout: (panel) => `The ${PANELS[panel]} panel did not respond.`,
@@ -71,6 +76,7 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
       else if (target.kind === 'logic') logicView.focus(target.id);
       else board.focus(target);
     },
+    notes: () => notes.focus(),
   };
   const assistantOn = () => doc.documentElement.dataset.assistant === 'on';
   // Until the setting has arrived the markup says "off", which would refuse an Ask that was only early.
@@ -190,6 +196,7 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
     $('wiki-back').textContent = `← Back to ${PANELS[single] ?? single}`;
     $('wiki-back').hidden = single === 'wiki';
   }
+  const notes = createNotesView(doc, { ...handlers, onOpenWiki: openWiki }, timers);
   const consoleView = createConsoleView(doc, { ...handlers, onAsk: (text, context) => askAssistant(text, context) });
   const terminalView = createTerminalView(doc, handlers);
   const logicView = createLogicView(doc, { ...handlers, onAsk: (text, context) => askAssistant(text, context) }, timers);
@@ -199,6 +206,7 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
   const welcome = createWelcomeView(doc, {
     ...handlers,
     showError: (message) => showError(message),
+    onNewBoard: () => openNewBoard(),
     onOpenSettings: (section) => settingsView.open(section),
     onReadPage: (name, opener) => {
       welcomeOpener = opener;
@@ -228,7 +236,7 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
   // focused or reached by a screen reader, so there is no half-locked state.
   function lockBar(on) {
     for (const node of doc.querySelector('header.bar').children) {
-      if (node.tagName === 'H1' || ['tutorial-leave', 'status', 'storage-warning'].includes(node.id)) continue;
+      if (node.tagName === 'H1' || ['tutorial-leave', 'status-anchor', 'storage-warning'].includes(node.id)) continue;
       if (on) node.setAttribute('inert', ''); else node.removeAttribute('inert');
     }
     $('guidance-guided').parentElement.title = on ? 'Locked while the tutorial runs' : '';
@@ -241,6 +249,8 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
   function targetNode(id) {
     const wanted = id ? $(id) : null;
     if (!wanted || wanted.disabled || wanted.closest('[inert]')) return null;
+    const dialog = wanted.closest('dialog');
+    if (dialog && !dialog.open) return targetNode(dialog.dataset.opener);   // a closed dialog: ring the button that opens it
     if (!wanted.closest('[hidden]')) return wanted;
     const panel = wanted.closest('[data-panel]');
     const tab = panel?.hidden && wanted.closest('[hidden]') === panel ? $(`region-tab-${panel.dataset.panel}`) : null;
@@ -260,7 +270,7 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
   // A target can turn usable after the coach drew, such as Connect once the virtual board's port is listed.
   const Watch = doc.defaultView?.MutationObserver;
   const targetWatch = Watch ? new Watch(() => applyTarget()) : null;
-  const WATCHED = { subtree: true, attributes: true, attributeFilter: ['disabled', 'hidden', 'inert'] };
+  const WATCHED = { subtree: true, attributes: true, attributeFilter: ['disabled', 'hidden', 'inert', 'open'] };
   // In the tutorial no question goes to a model; the coach shows example answers instead.
   const askAssistant = (text, context) => {
     if (doc.documentElement.dataset.tutorial === 'on') {
@@ -270,6 +280,9 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
     deliver('assistant', 'ask', context ? { text, context } : { text });
   };
   function resetBoardViews() {
+    saving = false;
+    if (savingTimer !== null) timers.clear(savingTimer);
+    savingTimer = null;
     board.reset();
     playbook.reset();
     consoleView.reset();
@@ -278,6 +291,7 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
     logicView.reset();
     assistantView.reset();
     exportView.reset();
+    notes.reset();
   }
   const viewHandlers = { ...handlers, onOpenWiki: openWiki };
   const dock = single ? null : createDock(doc, {
@@ -292,7 +306,7 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
     onLayout: () => { afterShow(); applyTarget(); },
   });
 
-  const board = createBoardView(doc, { ...viewHandlers, onAsk: (text, context) => askAssistant(text, context) });
+  const board = createBoardView(doc, { ...viewHandlers, onAsk: (text, context) => askAssistant(text, context), onNotice: showError });
   const playbook = createPlaybookView(doc, { ...viewHandlers, onAsk: (text, context) => askAssistant(text, context) });
 
   const panels = ['token-panel', 'empty-panel', 'board-panel'];
@@ -306,17 +320,37 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
     messageTimer = timers.set(() => { box.hidden = true; messageTimer = null; }, MESSAGE_MS);
   }
 
-  function setStatus(status, detail) {
+  const SAVING_DELAY_MS = 400;
+  const statusMenu = createStatusMenu(doc, handlers);
+  let saving = false;                 // a write has been in flight for longer than SAVING_DELAY_MS
+  let savingTimer = null;
+  let chipState = null;
+
+  function drawStatus(state) {
+    chipState = state;
+    if (!(state.save?.pending > 0)) {
+      if (savingTimer !== null) timers.clear(savingTimer);
+      savingTimer = null;
+      saving = false;
+    } else if (!saving && savingTimer === null) {
+      savingTimer = timers.set(() => { savingTimer = null; saving = true; drawStatus(chipState); }, SAVING_DELAY_MS);
+    }
+    const model = chipModel(state, saving);
     const chip = $('status');
-    chip.dataset.state = status;
-    chip.textContent = statusLabel(status);
-    chip.title = detail || '';
+    chip.dataset.state = model.state;
+    chip.textContent = model.text;
+    chip.title = model.title;
   }
 
-  const fields = { name: $('field-name'), device: $('field-device'), notes: $('field-notes') };
-  const readFields = () => ({ name: fields.name.value, device: fields.device.value, notes: fields.notes.value });
+  function setStatus(status) {
+    drawStatus({ status, error: null });
+    statusMenu.enable(false);
+  }
+
+  const fields = { name: $('field-name'), device: $('field-device') };
+  const readFields = () => ({ name: fields.name.value, device: fields.device.value });
   const save = () => handlers.onSaveDetails(readFields());
-  // Enter saves a single-line field. Notes saves on leaving the field, so Enter stays a newline there.
+  // Enter saves a single-line field.
   fields.name.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); fields.name.blur(); } });
   fields.device.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); fields.device.blur(); } });
   for (const input of Object.values(fields)) input.addEventListener('change', save);
@@ -329,11 +363,39 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
     });
   }
   $('details-form').addEventListener('submit', (event) => event.preventDefault());
+  $('reveal-board').addEventListener('click', () => handlers.revealBoard?.());
+  $('open-notes').addEventListener('click', () => deliver('notes', 'notes', {}));
 
   $('guidance-guided').addEventListener('click', () => handlers.onSetGuidance?.('guided'));
   $('guidance-expert').addEventListener('click', () => handlers.onSetGuidance?.('expert'));
   $('theme-select').addEventListener('change', (event) => handlers.onSetTheme?.(event.target.value));
-  $('board-select').addEventListener('change', (event) => { if (event.target.value) handlers.onSelectBoard(event.target.value); });
+  // The board list ends with "New board…", which swaps the list for the name form. With no boards the
+  // form shows at once and has nothing to go back to. `boardBefore` is the choice Cancel puts back.
+  let boardCount = 0;
+  let boardBefore = '';
+  const drawBoardField = (creating) => {
+    $('board-field').hidden = creating || boardCount === 0;
+    $('new-board-form').hidden = !creating && boardCount > 0;
+    $('new-board-cancel').hidden = boardCount === 0;
+  };
+  const openNewBoard = () => { drawBoardField(true); $('new-board-name').focus(); };
+  const cancelNewBoard = () => {
+    if (boardCount === 0) return;
+    $('new-board-name').value = '';
+    $('board-select').value = boardBefore;
+    drawBoardField(false);
+    $('board-select').focus();
+  };
+  $('board-select').addEventListener('change', (event) => {
+    const { value } = event.target;
+    if (value === NEW_BOARD) { openNewBoard(); return; }
+    boardBefore = value;
+    if (value) handlers.onSelectBoard(value);
+  });
+  $('new-board-cancel').addEventListener('click', cancelNewBoard);
+  $('new-board-name').addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && boardCount > 0) { event.preventDefault(); cancelNewBoard(); }
+  });
   $('new-board-form').addEventListener('submit', (event) => {
     event.preventDefault();
     const input = $('new-board-name');
@@ -412,7 +474,6 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
       doc.documentElement.dataset.guidance = value;
       $('guidance-guided').setAttribute('aria-pressed', String(value === 'guided'));
       $('guidance-expert').setAttribute('aria-pressed', String(value === 'expert'));
-      settingsView.setGuidance(value);
       $('assistant-input').placeholder = ASK_PLACEHOLDER[value];
       playbook.setGuidance(value);
       if (lastState) this.render(lastState);
@@ -517,7 +578,7 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
     tutorialBench: (model) => tutorialView.bench(model),
     tutorialSay: (text) => tutorialView.say(text),
     tutorialAskLeave: (step) => tutorialView.askLeave(step),
-    tutorialFocusCreate: () => $('new-board-name').focus(),
+    tutorialFocusCreate: () => openNewBoard(),
 
     serialMessage(message) {
       consoleView.message(message);
@@ -533,12 +594,19 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
     setBoards(slugs, selected) {
       const select = $('board-select');
       const none = selected === null && slugs.length ? [{ value: '', label: 'Choose a board', selected: true }] : [];
-      fillSelect(select, [...none, ...slugs.map((slug) => ({ value: slug, label: slug, selected: slug === selected }))]);
+      const add = slugs.length ? [{ value: NEW_BOARD, label: 'New board…', selected: false }] : [];
+      fillSelect(select, [...none, ...slugs.map((slug) => ({ value: slug, label: slug, selected: slug === selected })), ...add]);
       select.disabled = slugs.length === 0;
+      boardCount = slugs.length;
+      boardBefore = selected ?? '';
+      drawBoardField(false);
       $('new-board-button').disabled = false;
     },
 
     showError,
+
+    /** Save notes that are still waiting, before the board they belong to is closed. */
+    flushNotes: () => notes.flush(),
 
     /** The board on screen changed. The main window announces it so panel windows follow; a panel window only records it. */
     boardChanged(slug) {
@@ -549,7 +617,8 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
     /** Draw the client's state. Fields being typed in are left alone so incoming changes never eat input. */
     render(state) {
       const detail = state.error?.message;
-      setStatus(state.status, detail);
+      drawStatus(state);
+      statusMenu.enable(Boolean(state.project));
       if (state.status === 'rejected' && detail) this.showError(detail);
 
       const summary = summarize(state.project);
@@ -566,6 +635,9 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
         if (summary && doc.activeElement !== input) input.value = drawn[key] = summary[key] ?? '';
       }
       if (!summary) return;
+      notes.render(summary.notes, editable);
+      const first = firstLine(summary.notes);
+      $('open-notes').textContent = first ? shortText(first, 80) : 'No notes yet';
       board.render(state.project, editable);
       playbook.render(state.project, editable);
       consoleView.render(editable, state.project);
@@ -573,24 +645,6 @@ export function createView(doc, handlers, timers = { set: (fn, ms) => setTimeout
       timeline.render(state);
       logicView.render(state.project, editable);
       assistantView.render(state.project, editable);
-
-      $('counts').replaceChildren(...summary.counts.map(({ n, label }) => {
-        const item = doc.createElement('li');
-        item.textContent = `${n} ${label}`;
-        return item;
-      }));
-
-      const feed = $('feed');
-      feed.replaceChildren(...[...state.feed].reverse().map((event) => {
-        const row = doc.createElement('li');
-        for (const [className, text] of [['seq', `#${event.seq}`], ['time', clock(event.ts)], ['actor', event.actor], ['what', describeEvent(event, guessName(doc.documentElement.dataset.assistant))]]) {
-          const cell = doc.createElement('span');
-          cell.className = className;
-          cell.textContent = text;
-          row.append(cell);
-        }
-        return row;
-      }));
     },
   };
 }

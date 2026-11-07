@@ -66,12 +66,13 @@ load and save. External tools can add data the UI does not render yet.
 | `kind`   | string | `"image"` (reserved for future kinds)              |
 | `path`   | string | relative to the project folder, e.g. `assets/x.jpg`|
 | `label`  | string | tab name in the UI                                 |
-| `side`   | string | `front`, `back`, `detail`, `other`                 |
+| `side`   | string | optional, kept for older boards: `front`, `back`, `detail`, `other` |
 | `width`  | number | natural pixel width of the image                   |
 | `height` | number | natural pixel height                               |
 | `original` | string | service uploads only: the full-size original under `assets/photos/originals/`, kept local (git-ignored) |
+| `rotation` | int    | optional: 0, 90, 180 or 270, the clockwise quarter turns made in the app; the original on disk is never turned |
 
-Photos added through the service live at `assets/photos/<id>.jpg`: upright, at most 2560 px on the long side, no EXIF. `path`, `width` and `height` describe that copy.
+Photos added through the service live at `assets/photos/<id>.jpg`: upright, at most 2560 px on the long side, no EXIF. `path`, `width` and `height` describe that copy. A turned photo gets a new copy at `assets/photos/<id>-<hex>.jpg`; the earlier copies stay in the folder.
 
 ## `markers[]`
 
@@ -113,12 +114,12 @@ and `height`). The assistant works in percent of the photo and converts.
 | `label` | string | free text, shown in the grid                          |
 | `color` | string | six-digit hex or empty for an unset pin colour                                                   |
 | `note`  | string | measurements, observations                            |
-| `readings` | array | multimeter readings, oldest first (written by `pcbv measure`) |
+| `readings` | array | multimeter readings, oldest first (written by `pcbv measure` or the pin form) |
 | `guess` | object | optional AI guess from a photo: `{ "role", "confidence": "high" \| "medium" \| "low", "evidence", "by", "at" }`. Never the pin's `role`; the person sets that |
 
 Readings are appended through `pin/readingAdded`, so concurrent writers do not replace each other's lists.
 
-Each reading: `{ "ts": ISO, "mode": "dc" \| "ohm" \| "continuity", "value": number or null for OL, "unit": "V" \| "Ω", "text": "3.29 V", "powered": bool, "source": "cli" \| "tutorial" }`. Readings from the tutorial's simulated meter carry `"tutorial"`.
+Each reading: `{ "ts": ISO, "mode": "dc" \| "ohm" \| "continuity", "value": number or null for OL, "unit": "V" \| "Ω", "text": "3.29 V", "powered": bool, "source": "cli" \| "app" \| "tutorial" }`. Readings from the pin form carry `"app"`, and readings from the tutorial's simulated meter carry `"tutorial"`.
 
 Pins whose index is beyond `rows × cols` (after shrinking a grid) are kept
 in the file and hidden in the UI, so a mistaken resize loses nothing.

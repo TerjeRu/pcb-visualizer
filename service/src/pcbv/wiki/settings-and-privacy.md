@@ -7,8 +7,8 @@ what leaves the computer when you turn it on. To open Settings, use the button i
 
 ## General
 
-- **Guidance.** Guided shows explanations and hints. Expert hides them. Both modes ask a safety question
-  before a destructive action. The Guided / Expert switch in the top bar changes the same setting.
+- **Guidance.** The Guided / Expert switch in the top bar sets it. Guided shows explanations and hints.
+  Expert hides them. Both modes ask a safety question before a destructive action.
 - **Theme.** System follows your desktop. Light and Dark force one theme.
 
 Settings belong to this computer. The app keeps them in `~/.config/pcbv/settings.json`, not in your

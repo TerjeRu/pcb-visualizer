@@ -25,7 +25,7 @@ test('normalize repairs junk from disk', () => {
 test('moving a panel takes it out of where it was and makes it active', () => {
   const start = PRESETS.Learn;
   const next = move(start, 'console', 'center', 0);
-  assert.deepEqual(next.regions.center, ['console', 'photo']);
+  assert.deepEqual(next.regions.center, ['console', 'photo', 'notes']);
   assert.equal(next.active.center, 'console');
   assert.ok(!next.regions.right.includes('console'));
   assert.equal(start.regions.right.includes('console'), true, 'the input is not changed');
@@ -50,10 +50,10 @@ test('detach and attach', () => {
 
 test('stack regions show every panel, tab regions only the active one', () => {
   const shown = visiblePanels(PRESETS.Learn);
-  assert.deepEqual([...shown].sort(), ['board', 'feed', 'inspector', 'photo', 'playbook'].sort());
+  assert.deepEqual([...shown].sort(), ['board', 'inspector', 'photo', 'playbook'].sort());
   const tabbed = setMode(PRESETS.Learn, 'left', 'tabs');
-  assert.deepEqual([...visiblePanels(tabbed)].filter((p) => ['board', 'feed', 'inspector'].includes(p)), ['board']);
-  assert.deepEqual(activate(tabbed, 'feed').active.left, 'feed');
+  assert.deepEqual([...visiblePanels(tabbed)].filter((p) => ['board', 'inspector'].includes(p)), ['board']);
+  assert.deepEqual(activate(tabbed, 'inspector').active.left, 'inspector');
 });
 
 test('bad requests leave the layout alone', () => {
@@ -66,14 +66,14 @@ test('bad requests leave the layout alone', () => {
 
 test('a detached panel comes back where it was, even if that region emptied', () => {
   const out = detach(PRESETS.Learn, 'photo');
-  assert.deepEqual(out.regions.center, []);
+  assert.deepEqual(out.regions.center, ['notes']);
   assert.deepEqual(out.origins.photo, { region: 'center', index: 0 });
   const back = attach(out, 'photo');
-  assert.deepEqual(back.regions.center, ['photo']);
+  assert.deepEqual(back.regions.center, ['photo', 'notes']);
   assert.equal(back.active.center, 'photo');
   assert.deepEqual(back.origins, {});
   const inspector = attach(detach(PRESETS.Learn, 'inspector'), 'inspector');
-  assert.deepEqual(inspector.regions.left, ['board', 'inspector', 'feed'], 'same place in the stack');
+  assert.deepEqual(inspector.regions.left, ['board', 'inspector'], 'same place in the stack');
   assert.deepEqual(attach(detach(PRESETS.Learn, 'photo'), 'photo', 'bottom').regions.bottom, ['photo'], 'an explicit region wins');
 });
 
@@ -142,10 +142,10 @@ test('a panel that was active when put away hands the tab to the next one', () =
 
 test('showing an away panel returns it to its origin, or the right region without one', () => {
   const back = attach(putAway(PRESETS.Learn, 'inspector'), 'inspector');
-  assert.deepEqual(back.regions.left, ['board', 'inspector', 'feed']);
+  assert.deepEqual(back.regions.left, ['board', 'inspector']);
   assert.deepEqual(back.away, []);
   assert.deepEqual(back.origins, {});
-  const noOrigin = { ...PRESETS.Learn, regions: { ...PRESETS.Learn.regions, left: ['board', 'feed'] }, away: ['inspector'] };
+  const noOrigin = { ...PRESETS.Learn, regions: { ...PRESETS.Learn.regions, left: ['board'] }, away: ['inspector'] };
   assert.deepEqual(locate(attach(noOrigin, 'inspector'), 'inspector'), { region: 'right', index: 7 });
 });
 
@@ -179,11 +179,39 @@ test('away survives saving; old layouts without it load; junk and duplicates are
 });
 
 test('a layout saved by the version before the Panels menu loads unchanged', () => {
-  const saved = { regions: { left: ['board', 'inspector', 'feed'], center: ['photo'], right: ['playbook', 'wiki', 'console', 'timeline', 'terminal', 'assistant'], bottom: [] },
+  const saved = { regions: { left: ['board', 'inspector'], center: ['photo'], right: ['playbook', 'wiki', 'console', 'timeline', 'terminal', 'assistant'], bottom: [] },
     active: { left: 'board', center: 'photo', right: 'wiki', bottom: null },
     modes: { left: 'stack', center: 'tabs', right: 'tabs', bottom: 'tabs' }, detached: ['logic'], origins: { logic: { region: 'right', index: 4 } } };
   const layout = normalize(saved);
-  assert.deepEqual(layout, { ...saved, away: [] });
+  assert.deepEqual(layout, { ...saved, regions: { ...saved.regions, right: [...saved.regions.right, 'notes'] }, away: [] });
+});
+
+test('a layout saved with the removed Changes panel loads clean', () => {
+  const base = normalize(PRESETS.Learn);
+  const where = {
+    'a region': { ...base, regions: { ...base.regions, left: ['board', 'feed', 'inspector'] } },
+    detached: { ...base, detached: ['feed'] },
+    away: { ...base, away: ['feed'] },
+    'the active tab': { ...base, active: { ...base.active, left: 'feed' } },
+    origins: { ...base, detached: ['feed'], origins: { feed: { region: 'left', index: 2 } } },
+  };
+  for (const [name, saved] of Object.entries(where)) {
+    const layout = normalize(saved);
+    assert.equal(JSON.stringify(layout).includes('feed'), false, `feed is gone from ${name}`);
+    assert.deepEqual(all(layout), Object.keys(PANELS).sort(), `every panel is placed once (${name})`);
+    assert.ok(layout.regions.left.includes(layout.active.left), `the active left tab is a panel that is there (${name})`);
+  }
+});
+
+test('the Notes panel sits where the presets put it, and an old layout gains it', () => {
+  assert.equal(PANELS.notes, 'Notes');
+  assert.deepEqual(PRESETS.Learn.regions.center, ['photo', 'notes']);
+  assert.deepEqual(PRESETS.Console.regions.right.slice(0, 3), ['playbook', 'wiki', 'notes']);
+  assert.deepEqual(PRESETS.Analysis.regions.center.slice(0, 2), ['timeline', 'notes']);
+  assert.ok(PRESETS.Wall.detached.includes('notes'));
+  const old = JSON.parse(JSON.stringify(PRESETS.Learn));
+  old.regions.center = ['photo'];
+  assert.deepEqual(locate(normalize(old), 'notes'), { region: 'right', index: old.regions.right.length });
 });
 
 test('with the assistant off the Agent panel is not away either, and it comes back at the end of the right-hand tabs', () => {

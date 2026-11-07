@@ -17,6 +17,22 @@ def _replace_by_id(items: list[dict], target: str, fn) -> list[dict]:
     return [fn(item) if item.get("id") == target else item for item in items]
 
 
+def _patched(record: dict, event: dict) -> dict:
+    """The patch merged in, then the keys in `unset` removed (an undo of a patch that added them)."""
+    merged = {**record, **event["patch"]}
+    for key in event.get("unset", []):
+        merged.pop(key, None)
+    return merged
+
+
+def _insert(items: list, item, at: int | None) -> None:
+    """Append, or put the item back at `at` (an undo of its removal)."""
+    if at is None:
+        items.append(item)
+    else:
+        items.insert(at, item)
+
+
 def _pin_has_content(pin: dict) -> bool:
     return bool(
         pin.get("role") or pin.get("label") or pin.get("color") or pin.get("note")
@@ -38,12 +54,12 @@ def apply_event(project: Project, event: dict[str, Any]) -> Project:
         return copy.deepcopy(event["project"])
 
     if kind == "project/metaUpdated":
-        p["meta"] = {**p["meta"], **event["patch"]}
+        p["meta"] = _patched(p["meta"], event)
 
     elif kind == "asset/added":
-        p["assets"].append(event["asset"])
+        _insert(p["assets"], event["asset"], event.get("at"))
     elif kind == "asset/updated":
-        p["assets"] = _replace_by_id(p["assets"], event["id"], lambda a: {**a, **event["patch"]})
+        p["assets"] = _replace_by_id(p["assets"], event["id"], lambda a: _patched(a, event))
     elif kind == "asset/removed":
         asset_id = event["id"]
         markers = [m for m in p["markers"] if m.get("assetId") != asset_id]
@@ -56,11 +72,11 @@ def apply_event(project: Project, event: dict[str, Any]) -> Project:
             p["annotations"] = [a for a in p["annotations"] if a.get("assetId") != asset_id]
 
     elif kind == "marker/added":
-        p["markers"].append(event["marker"])
+        _insert(p["markers"], event["marker"], event.get("at"))
         if event.get("schematic"):
-            p["schematics"].append(event["schematic"])
+            _insert(p["schematics"], event["schematic"], event.get("schematicAt"))
     elif kind == "marker/updated":
-        p["markers"] = _replace_by_id(p["markers"], event["id"], lambda m: {**m, **event["patch"]})
+        p["markers"] = _replace_by_id(p["markers"], event["id"], lambda m: _patched(m, event))
     elif kind == "marker/removed":
         marker = next((m for m in p["markers"] if m.get("id") == event["id"]), None)
         if marker is None:
@@ -71,7 +87,7 @@ def apply_event(project: Project, event: dict[str, Any]) -> Project:
             p["schematics"] = [s for s in p["schematics"] if s.get("id") != marker.get("schematicId")]
 
     elif kind == "schematic/updated":
-        p["schematics"] = _replace_by_id(p["schematics"], event["id"], lambda s: {**s, **event["patch"]})
+        p["schematics"] = _replace_by_id(p["schematics"], event["id"], lambda s: _patched(s, event))
 
     elif kind == "pin/readingAdded":
         schematic = next(s for s in p["schematics"] if s["id"] == event["schematicId"])
@@ -106,21 +122,29 @@ def apply_event(project: Project, event: dict[str, Any]) -> Project:
         p["captures"] = _replace_by_id(p.get("captures", []), event["id"], lambda c: {**c, **event["patch"]})
 
     elif kind == "annotation/added":
-        p.setdefault("annotations", []).append(event["annotation"])
+        _insert(p.setdefault("annotations", []), event["annotation"], event.get("at"))
     elif kind == "annotation/updated":
-        p["annotations"] = _replace_by_id(p.get("annotations", []), event["id"], lambda a: {**a, **event["patch"]})
+        p["annotations"] = _replace_by_id(p.get("annotations", []), event["id"], lambda a: _patched(a, event))
     elif kind == "annotation/removed":
         p["annotations"] = [a for a in p.get("annotations", []) if a.get("id") != event["id"]]
 
     elif kind == "playbook/updated":
         # Progress per playbook; with stepId the patch merges into that step, otherwise into the playbook.
+        # With unset, what it leaves empty is removed: an undo of a first tick leaves no trace.
         playbooks = p.setdefault("playbooks", {})
-        record = playbooks.setdefault(event["playbookId"], {})
-        if event.get("stepId"):
+        pid, sid = event["playbookId"], event.get("stepId")
+        record = playbooks.setdefault(pid, {})
+        if sid:
             steps = record.setdefault("steps", {})
-            steps[event["stepId"]] = {**steps.get(event["stepId"], {}), **event["patch"]}
+            steps[sid] = _patched(steps.get(sid, {}), event)
+            if "unset" in event and not steps[sid]:
+                del steps[sid]
+            if "unset" in event and not steps:
+                del record["steps"]
         else:
-            record.update(event["patch"])
+            playbooks[pid] = record = _patched(record, event)
+        if "unset" in event and not record:
+            del playbooks[pid]
 
     else:  # unreachable for validated events; fail loudly on a journal from a newer version
         raise ValueError(f"cannot apply unknown event type {kind!r}")

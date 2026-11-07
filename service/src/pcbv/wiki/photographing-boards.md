@@ -16,8 +16,8 @@ Your photos are the map for the rest of the work. You mark headers on them and r
 
 ## What to shoot
 
-- Take the whole front and the whole back. Add them as **front** and **back**.
-- Take close-ups of the main chips and of anything that looks like a header. Add them as **detail**.
+- Take the whole front and the whole back. Name them Front and Back with **Rename** in the photo's menu.
+- Take close-ups of the main chips and of anything that looks like a header.
 - Take the label on the case, for the model and the revision.
 
 The app keeps your original photo on this machine. It puts a smaller copy without location data into git.

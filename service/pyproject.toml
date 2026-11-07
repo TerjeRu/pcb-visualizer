@@ -1,6 +1,6 @@
 [project]
 name = "pcbv"
-version = "0.1.1"
+version = "0.1.2"
 description = "PCB Visualizer local service: event log, state, WebSocket sync and the pcbv CLI."
 requires-python = ">=3.12"
 license = "MIT"

@@ -97,3 +97,69 @@ test('without the option, owner-written links behave as before', () => {
   assert.equal(a.href, 'https://example.com/p');
   assert.equal(a.rel, 'noopener noreferrer');
 });
+
+test('task list items become checkboxes that are disabled without a toggle handler', () => {
+  const box = render('- [ ] solder **J2**\n- [x] photo\n- [X] upper case\n- plain\n- [] not a task');
+  const boxes = [...box.querySelectorAll('li.task > input[type=checkbox]')];
+  assert.deepEqual(boxes.map((b) => b.checked), [false, true, true]);
+  assert.ok(boxes.every((b) => b.disabled));
+  assert.equal(boxes[0].getAttribute('aria-label'), 'solder J2');
+  assert.equal(box.querySelector('li.task strong').textContent, 'J2');
+  const items = [...box.querySelectorAll('li')];
+  assert.equal(items[3].className, '');
+  assert.equal(items[3].querySelector('input'), null);
+  assert.equal(items[4].textContent, '[] not a task');
+});
+
+test('with onToggleTask the checkboxes are enabled and report their index among the tasks', () => {
+  const toggled = [];
+  const box = doc.createElement('div');
+  box.append(renderMarkdown(doc, '- [ ] one\n- item\n\n```\n- [ ] code\n```\n\n1. [x] two\n   continued\n- [ ] three', { onToggleTask: (i) => toggled.push(i) }));
+  const boxes = [...box.querySelectorAll('input[type=checkbox]')];
+  assert.equal(boxes.length, 3, 'a task inside a code block is not counted');
+  assert.ok(boxes.every((b) => !b.disabled));
+  for (const b of [boxes[2], boxes[0], boxes[1]]) b.dispatchEvent(new doc.defaultView.Event('change'));
+  assert.deepEqual(toggled, [2, 0, 1]);
+  assert.match(box.querySelectorAll('li.task')[1].textContent, /two continued/);
+});
+
+test('a task without text has a label and nothing else in the renderer changes', () => {
+  const box = render('- [ ]\n\nplain **text**');
+  assert.equal(box.querySelector('input').getAttribute('aria-label'), 'Task');
+  assert.equal(box.querySelector('p').innerHTML, 'plain <strong>text</strong>');
+});
+
+test('a numbered list with blank lines between its items is one list', () => {
+  const box = render('1. A\n\n2. B\n\n3. C');
+  assert.equal(box.querySelectorAll('ol').length, 1);
+  assert.deepEqual([...box.querySelectorAll('ol li')].map((li) => li.textContent), ['A', 'B', 'C']);
+  assert.equal(box.querySelector('ol').hasAttribute('start'), false);
+});
+
+test('a bullet list with blank lines between its items is one list', () => {
+  const box = render('- A\n\n- B\n\n\n- C');
+  assert.equal(box.querySelectorAll('ul').length, 1);
+  assert.equal(box.querySelectorAll('ul li').length, 3);
+});
+
+test('an ordered list keeps its first number', () => {
+  const box = render('3. A\n4. B');
+  assert.equal(box.querySelector('ol').getAttribute('start'), '3');
+  assert.equal(render('1. A\n1. B').querySelector('ol').hasAttribute('start'), false);
+});
+
+test('lists of another kind, or split by a paragraph, stay separate', () => {
+  const kinds = render('1. A\n\n- B');
+  assert.deepEqual([...kinds.children].map((c) => c.tagName), ['OL', 'UL']);
+  const split = render('- A\n\nSome text\n\n1. X');
+  assert.deepEqual([...split.children].map((c) => c.tagName), ['UL', 'P', 'OL']);
+});
+
+test('a task list with blank lines is one list and the index follows the text order', () => {
+  const toggled = [];
+  const box = doc.createElement('div');
+  box.append(renderMarkdown(doc, '- [ ] one\n\n- [ ] two\n\n- [ ] three', { onToggleTask: (i) => toggled.push(i) }));
+  assert.equal(box.querySelectorAll('ul').length, 1);
+  box.querySelectorAll('input')[1].dispatchEvent(new doc.defaultView.Event('change'));
+  assert.deepEqual(toggled, [1]);
+});

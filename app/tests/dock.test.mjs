@@ -127,10 +127,37 @@ test('a panel window shows only that panel', () => {
 test('a moved panel is flashed so it can be found, and an empty centre is marked', async () => {
   const { doc } = await setup();
   doc.getElementById('panel-photo').scrollIntoView = () => {};
+  openPanels(doc);
+  choose(doc, 'notes', 'Put away');    // Photo is then alone in the centre
   doc.querySelector('#region-center .region-tools .panel-menu').click();
   [...doc.querySelectorAll('.menu button')].find((b) => b.textContent === 'Move to left').click();
   assert.ok(doc.getElementById('panel-photo').classList.contains('moved'));
   assert.equal(doc.getElementById('board-panel').classList.contains('has-center'), false);
+});
+
+const chooseWorkspaceAction = (doc, label) => {
+  doc.getElementById('workspace-menu').click();
+  [...doc.querySelectorAll('[aria-label="Workspace actions"][role="menu"] button')].find((b) => b.textContent === label).click();
+};
+
+test('the workspace actions sit in one menu with the same two actions, and Reset needs a preset', async () => {
+  const { doc } = await setup();
+  const button = doc.getElementById('workspace-menu');
+  assert.equal(button.getAttribute('aria-label'), 'Workspace actions');
+  assert.equal(doc.getElementById('workspace-save'), null);
+  assert.equal(doc.getElementById('workspace-reset'), null);
+  button.click();
+  const items = () => [...doc.querySelectorAll('[role="menu"][aria-label="Workspace actions"] [role="menuitem"]')];
+  assert.deepEqual(items().map((b) => [b.textContent, b.disabled]), [['Save as…', false], ['Reset layout', false]]);
+  assert.equal(button.getAttribute('aria-expanded'), 'true');
+  doc.dispatchEvent(new doc.defaultView.KeyboardEvent('keydown', { key: 'Escape' }));
+  assert.equal(items().length, 0);
+  assert.equal(doc.activeElement, button);
+  chooseWorkspaceAction(doc, 'Save as…');
+  doc.getElementById('workspace-name').value = 'Bench';
+  doc.getElementById('workspace-name-form').dispatchEvent(new doc.defaultView.Event('submit', { cancelable: true }));
+  button.click();
+  assert.deepEqual(items().map((b) => [b.textContent, b.disabled]), [['Save as…', false], ['Reset layout', true]], 'a saved layout has no start to go back to');
 });
 
 test('Save as asks for a name in the bar; Escape and an empty name save nothing', async () => {
@@ -138,15 +165,16 @@ test('Save as asks for a name in the bar; Escape and an empty name save nothing'
   const form = doc.getElementById('workspace-name-form');
   const input = doc.getElementById('workspace-name');
   const submit = () => form.dispatchEvent(new doc.defaultView.Event('submit', { cancelable: true }));
-  doc.getElementById('workspace-save').click();
+  chooseWorkspaceAction(doc, 'Save as…');
   assert.equal(form.hidden, false);
-  assert.equal(doc.getElementById('workspace-save').hidden, true);
+  assert.equal(doc.getElementById('workspace-menu-anchor').hidden, true);
   assert.equal(doc.activeElement, input);
   input.dispatchEvent(new doc.defaultView.KeyboardEvent('keydown', { key: 'Escape' }));
   assert.equal(form.hidden, true);
+  assert.equal(doc.activeElement, doc.getElementById('workspace-menu'), 'focus returns to the menu button');
   assert.equal(calls.length, 0);
 
-  doc.getElementById('workspace-save').click();
+  chooseWorkspaceAction(doc, 'Save as…');
   input.value = '   ';
   submit();
   assert.equal(form.hidden, false, 'an empty name keeps the field open');
@@ -426,7 +454,7 @@ test('the Panels menu lists every panel in a fixed order with its state and the 
   openPanels(doc);
   assert.deepEqual([...doc.querySelectorAll('.panels-menu .panels-row')].map((r) => r.dataset.panel), Object.keys(PANELS));
   assert.equal(button.getAttribute('aria-expanded'), 'true');
-  assert.deepEqual(states(doc), { board: 'Left', inspector: 'Left', feed: 'Left', photo: 'Centre', playbook: 'Right', wiki: 'Right', console: 'Right', timeline: 'Right', logic: 'Right', terminal: 'Right', assistant: 'Right' });
+  assert.deepEqual(states(doc), { board: 'Left', inspector: 'Left', photo: 'Centre', notes: 'Centre', playbook: 'Right', wiki: 'Right', console: 'Right', timeline: 'Right', logic: 'Right', terminal: 'Right', assistant: 'Right' });
   assert.deepEqual(actions(doc, 'wiki'), ['Show', 'Open in own window', 'Put away']);
   assert.equal(row(doc, 'wiki').getAttribute('aria-label'), 'Wiki, Right');
   choose(doc, 'logic', 'Open in own window');
@@ -450,9 +478,11 @@ test('every action works: show, own window, put away, focus window, bring back, 
   assert.deepEqual(dock.layout().detached, ['logic']);
 
   openPanels(doc);
+  choose(doc, 'notes', 'Put away');    // Photo is then alone in the centre
+  openPanels(doc);
   choose(doc, 'photo', 'Put away');
   assert.equal(regionOf('photo'), null);
-  assert.deepEqual(dock.layout().away, ['photo']);
+  assert.deepEqual(dock.layout().away, ['notes', 'photo']);
   assert.equal(doc.getElementById('panel-photo').parentElement.id, 'panel-store');
   assert.equal(doc.activeElement, doc.getElementById('panels-open'), 'focus goes to the Panels button');
   assert.equal(doc.getElementById('board-panel').classList.contains('has-center'), false);
@@ -705,7 +735,7 @@ test('an action aimed at a put-away panel brings it back instead of running on a
 });
 
 test('a workspace saved before the Panels menu existed loads with nothing away', async () => {
-  const saved = { regions: { left: ['board', 'inspector', 'feed'], center: ['photo'], right: ['playbook', 'wiki', 'console', 'timeline', 'logic', 'terminal', 'assistant'], bottom: [] },
+  const saved = { regions: { left: ['board', 'inspector'], center: ['photo'], right: ['playbook', 'wiki', 'console', 'timeline', 'logic', 'terminal', 'assistant'], bottom: [] },
     active: { left: 'board', center: 'photo', right: 'playbook', bottom: null },
     modes: { left: 'stack', center: 'tabs', right: 'tabs', bottom: 'tabs' }, detached: [], origins: {} };
   const { doc, dock } = await setup({ loaded: { current: 'Old', saved: { Old: saved } } });

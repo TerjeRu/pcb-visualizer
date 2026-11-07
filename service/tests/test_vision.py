@@ -129,3 +129,29 @@ def test_a_rotated_photo_reports_upright_original_pixels_through_the_cache(tmp_p
     _, info = render_view(tmp_path, asset)
     ((kept, _), _size), = vision._decoded._items.values()
     assert kept.size[1] > kept.size[0] and info["source_pixels"] == [2000, 3000]
+
+
+@pytest.mark.parametrize("keep_original", [True, False])
+def test_a_turned_photo_shows_turned_close_ups(tmp_path, keep_original):
+    from pcbv.photos import rotate
+    asset = ingest(tmp_path, photo())
+    turned = {**asset, "path": rotate(tmp_path, asset, 1), "width": asset["height"], "height": asset["width"], "rotation": 90}
+    if not keep_original:
+        (tmp_path / asset["original"]).unlink()
+    data, info = render_view(tmp_path, turned, {"x": 60, "y": 60, "w": 10, "h": 10})
+    assert info["from"] == ("original" if keep_original else "copy")
+    view = opened(data).convert("RGB")
+    middle = view.getpixel((int(view.width * 0.55), int(view.height * 0.55)))     # 65.5 %, between grid lines
+    assert min(middle) > 200, "the white part moved with the turn"
+    if keep_original:
+        assert info["source_pixels"] == [200, 300]
+
+
+def test_a_turn_is_not_served_from_the_unturned_decode(tmp_path, monkeypatch):
+    from pcbv import vision
+    monkeypatch.setattr(vision, "CACHE_LONG_SIDE", 1000)
+    out = io.BytesIO()
+    Image.new("RGB", (3000, 5), (20, 90, 40)).save(out, "JPEG")   # kept at 1000 x 2: 3 and 2.5 pixels per kept pixel
+    asset = ingest(tmp_path, out.getvalue())
+    assert render_view(tmp_path, asset)[1]["source_pixels"] == [3000, 5]
+    assert render_view(tmp_path, {**asset, "rotation": 90})[1]["source_pixels"] == [5, 3000]

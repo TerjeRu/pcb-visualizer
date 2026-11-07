@@ -76,6 +76,31 @@ def test_every_format_redacted_with_shared_stand_ins(demo, tmp_path):
     assert result.counts["mac"] == 1 and result.counts["credential"] == 1 and result.photos_to_check == 1
 
 
+@pytest.mark.parametrize("label, stem", [
+    ("Back side", "photo-1-back-side"), ("a/b\\c", "photo-1-a-b-c"), ("Забор", "photo-1-photo"), ("", "photo-1-photo"),
+])
+def test_photo_file_names_come_from_the_label(demo, tmp_path, label, stem):
+    board = Board.open(demo)
+    try:
+        asset = board.project["assets"][0]["id"]
+        board.apply({"type": "asset/updated", "id": asset, "patch": {"label": label}}, "test")
+    finally:
+        board.close()
+    files = export_board(demo, tmp_path / "out").files
+    assert f"{stem}.png" in files and f"{stem}.svg" in files
+
+
+def test_a_very_long_label_cannot_make_a_file_name_too_long(demo, tmp_path):
+    board = Board.open(demo)
+    try:
+        asset = board.project["assets"][0]
+        board.apply({"type": "asset/added", "asset": {**asset, "id": "img_long", "label": "x" * 400}}, "test")
+    finally:
+        board.close()
+    names = export_board(demo, tmp_path / "out").files
+    assert f"photo-2-{'x' * 40}.png" in names
+
+
 def test_unredacted_export_says_so(demo, tmp_path):
     result = export_board(demo, tmp_path / "out", ["report", "zip"], redact=False)
     report = (result.folder / "report.md").read_text()

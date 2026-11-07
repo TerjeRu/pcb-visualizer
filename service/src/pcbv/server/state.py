@@ -132,11 +132,17 @@ State = Annotated[AppState, Depends(app_state)]
 
 
 async def submit(entry: Entry, raw: Any, actor: str, *, internal: bool = False) -> dict:
-    """The only write path. One lock per board gives every client the same order."""
+    """The only write path. One lock per board gives every client the same order.
+
+    `raw` can be a function of the current project that returns the event; it runs under the lock,
+    after an outside edit of project.pcb.json is taken in, for a change that must be built from the
+    latest state (turning a photo)."""
     async with entry.lock:
         before = entry.board.seq
         storage_before = copy.deepcopy(entry.board.storage)
         try:
+            if callable(raw):
+                raw = raw(entry.board.latest_project())
             stored = entry.board.apply(raw, actor, internal=internal)
         finally:
             # Includes an outside edit of project.pcb.json recorded just before this event,

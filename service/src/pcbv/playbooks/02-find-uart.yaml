@@ -37,7 +37,7 @@ steps:
       2. Put the black probe on a known ground. Use the metal shell of a USB or Ethernet port, a shield can or a screw hole ring.
       3. Touch the red probe to each pin of the candidate header in turn.
       4. The pin that beeps is GND. Click it in the Header panel and press **g**.
-      5. Record the reading, for example `pcbv measure <board> J4 4 beep`, or the resistance, like `0.3ohm`. If `pcbv` is not on your PATH, run `uv run pcbv measure ...` in the service folder.
+      5. Record the reading in the pin's **Reading** field, for example `beep` or `0.3ohm`. You can also run `pcbv measure <board> J4 4 beep`. If `pcbv` is not on your PATH, run `uv run pcbv measure ...` in the service folder.
     gates:
       - id: unplugged
         text: The board is unplugged. A continuity test on a powered board gives wrong readings and can damage the meter.
@@ -67,7 +67,7 @@ steps:
       1. Set the meter to DC volts, 20 V range (or auto).
       2. Put the black probe on the GND pin you found, or on the port shell.
       3. Plug in the board. Put the red probe on one pin and read the meter for the first 30 seconds of boot. Read it again when the reading settles.
-      4. Record each pin, for example `pcbv measure <board> J4 1 3.31V`.
+      4. Record each pin in its **Reading** field, for example `3.31V`. You can also run `pcbv measure <board> J4 1 3.31V`.
 
       Keep the red probe steady. If the probe slips and bridges two pins, it can damage the board. This is the main risk in this step.
     gates:

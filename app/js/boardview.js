@@ -14,6 +14,7 @@ import { createPhotoView } from './photoview.js';
 
 // Board shortcuts work only while focus is in the Header panel or the photo, never in a console or a form.
 const SHORTCUT_SCOPE = '#panel-inspector, #panel-photo';
+const ARROW_KEYS = { ArrowLeft: 1, ArrowRight: 1, ArrowUp: 1, ArrowDown: 1 };
 
 export function createBoardView(doc, handlers) {
   const { $ } = dom(doc);
@@ -40,17 +41,19 @@ export function createBoardView(doc, handlers) {
       if (event.key === 'Backspace' || event.key === 'Delete') { parts.inspector.clearPin(); event.preventDefault(); }
       return;
     }
+    if (event.key in ARROW_KEYS && !event.target.closest?.('.menu') && parts.overlay.nudge(event.key, event.shiftKey)) { event.preventDefault(); return; }
     if (s.markerId && (event.key === 'Delete' || event.key === 'Backspace')) { parts.inspector.removeMarker(); event.preventDefault(); }
     if (s.calloutId && (event.key === 'Delete' || event.key === 'Backspace')) { parts.calloutForm.remove(); event.preventDefault(); }
   });
 
   function draw() {
     if (!s.project) return;
+    parts.overlay.settle();
     if (!s.asset()) s.assetId = s.project.assets[0]?.id ?? null;
     if (s.markerId && !s.marker()) { s.markerId = null; s.pinIndex = null; }
     if (s.calloutId && s.callout()) s.pendingCallout = null;
     else if (s.calloutId && s.calloutId !== s.pendingCallout) s.calloutId = null;
-    for (const id of ['tool-select', 'tool-box', 'tool-callout', 'photo-file', 'photo-side']) $(id).disabled = !s.editable;
+    for (const id of ['tool-select', 'tool-box', 'tool-callout', 'photo-file']) $(id).disabled = !s.editable;
     $('add-photo').classList.toggle('disabled', !s.editable);
     for (const id of ['zoom-in', 'zoom-out', 'zoom-fit', 'photo-ask']) $(id).disabled = !s.asset();
     parts.photo.drawTabs();
@@ -86,6 +89,7 @@ export function createBoardView(doc, handlers) {
       s.assetId = s.markerId = s.calloutId = s.pinIndex = s.shownPath = s.preview = null;
       s.zoom = null;
       s.drag = null;
+      parts.overlay.cancelNudge();
       parts.overlay.setTool('select');
     },
   };

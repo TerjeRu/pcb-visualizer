@@ -1,14 +1,19 @@
 // Takes the README screenshots (docs/screenshots/) from a running service with the demo board, through
 // headless Firefox and WebDriver BiDi. It changes settings through the API, so it runs only in a scratch
 // environment; ~/hw and ~/.config stay out:
-//   S=$(mktemp -d); export XDG_RUNTIME_DIR=$S/run XDG_CONFIG_HOME=$S/config
+//   S=$(mktemp -d); export XDG_RUNTIME_DIR=$S/run XDG_CONFIG_HOME=$S/config XDG_DATA_HOME=$S/data
 //   mkdir -m 700 $S/run; mkdir -p $S/config/pcbv; echo '{"assistant": "on"}' > $S/config/pcbv/settings.json
 //   cd service && uv run pcbv --root $S/boards demo
 //   uv run pcbv --root $S/boards serve --port 8766 &    uv run pcbv vdev &    uv run pcbv fake-model &
+//   for r in 4:beep 1:3.29V 2:3.12V 3:3.30V 4:0V; do uv run pcbv --root $S/boards measure demo-router J4 ${r%:*} ${r#*:}; done
 //   firefox --headless --profile $S/ff --no-remote --remote-debugging-port 9333 &
 //   node ../tools/screenshots.mjs ../docs/screenshots && optipng -o2 ../docs/screenshots/*.png
-// The fake model needs the assistant on to start. The Agent shot uses the Local profile pointed at it, so
-// no key or paid model is involved. Use a fresh $S: the Agent shot shows the counts of earlier runs.
+// The readings are made up; with them the workbench shot completes the Find the UART steps up to Measure
+// voltages. PCBV_SHOTS=workbench,notes takes only those shots. The fake model needs the assistant on to start.
+// The Agent shot uses the Local profile pointed at it, so no key or paid model is involved. The README's Agent
+// shot is a real answer: PCBV_AGENT_BASE_URL=https://openrouter.ai/api/v1 PCBV_AGENT_MODEL=deepseek/deepseek-v4-pro
+// PCBV_AGENT_PRICES=0.74/1.48, with the OpenRouter key in the keyring (pcbv, assistant:tutor). Use a fresh $S:
+// the playbook, the notes and the Agent counts keep what earlier runs left.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -49,7 +54,9 @@ async function open(href, w, h) {
   const menu = async (name, item) => { await ev(`document.querySelector('.panel-menu[data-menu-for="${name}"]')?.click()`); return click(item, '.menu button'); };
   const choose = (sel, value) => ev(`(() => { const s = document.querySelector(${JSON.stringify(sel)}); s.value = ${JSON.stringify(value)}; s.dispatchEvent(new Event('change', { bubbles: true })); return s.value; })()`);
   const close = () => send('browsingContext.close', { context: ctx });
-  return { ev, shot, click, menu, choose, close };
+  // Reset layout, from the workspace menu in the top bar.
+  const reset = async () => { await ev(`document.getElementById('workspace-menu').click()`); await wait(200); await click('Reset layout', '[role=menu] button'); await wait(800); };
+  return { ev, shot, click, menu, choose, close, reset };
 }
 
 async function workbench() {
@@ -57,11 +64,14 @@ async function workbench() {
   await authed('/api/settings', { theme: 'dark', guidance: 'guided', assistant: 'off' });
   const m = await open(await mainUrl(), 1920, 1300);   // the bottom region gets 42% of the height: enough for the whole Console panel
   await m.choose('#workspace-select', 'Learn');
-  await m.click('Reset'); await wait(800);
+  await m.reset();
   await m.menu('board', 'Put away');
   await m.click('Console', '[role=tab]'); await wait(300);
   await m.menu('console', 'Move to bottom');
   await m.click('Playbook', '[role=tab]'); await wait(800);
+  // The readings check step 3 (Measure voltages); tick its safety boxes and mark it done, as a person would.
+  for (let i = 0; i < 2; i++) { await m.ev(`[...document.querySelectorAll('#playbook-body .gates input')].find((b) => !b.checked && !b.disabled)?.click()`); await wait(400); }
+  await m.click('Mark step done'); await wait(800);
   await m.ev(`document.getElementById('serial-connect').click()`);
   await wait(10000);                                         // the virtual board boots in about 8 seconds
   await m.ev(`document.getElementById('key-enter').click()`); await wait(1200);
@@ -71,13 +81,40 @@ async function workbench() {
   }
   await m.click('J4'); await wait(600);
   await m.ev(`[...document.querySelectorAll('#pin-grid button')][1]?.click()`); await wait(300);
-  await m.ev(`document.querySelectorAll('#region-left .region-body').forEach((e) => { e.scrollTop = 0; })`);
+  // The TX pin's readings and the Reading field, at the bottom of the left region.
+  await m.ev(`[...document.querySelectorAll('#region-left label')].find((l) => l.textContent.trim().startsWith('Silkscreen label'))?.scrollIntoView({ block: 'start' })`);
   await m.click('Fit'); await wait(800);
   console.log('console chars:', await m.ev(`document.getElementById('serial-output').textContent.length`));
   await m.shot('workbench');
   await m.ev(`document.getElementById('serial-connect').click()`); await wait(500);
-  await m.click('Reset');
+  await m.reset();
   await m.close();
+}
+
+async function notes() {
+  // The Notes panel in Split mode: a dated entry, a task list and the flash layout from the console.
+  await authed('/api/settings', { theme: 'dark' });
+  const n = await open(await panel('notes'), 1400, 640);
+  await n.click('Split'); await wait(300);
+  const text = [
+    '## UART on J4', '',
+    '- [x] Find GND with continuity (pin 4 beeps)',
+    '- [x] Powered readings on all four pins',
+    '- [ ] Confirm TX with the logic analyzer',
+    '- [ ] Back up the flash before any change', '',
+    'Pin 2 wobbles around **3.12 V** while the board prints, so it is TX.',
+    'The logic level is 3.3 V: set the adapter to 3.3 V, never 5 V.', '',
+    '### Flash partitions', '',
+    '| Name | Size |', '|---|---|',
+    '| u-boot | 192 KB |', '| factory | 64 KB |', '| kernel | 2 MB |', '| rootfs | 11.7 MB |', '', '',
+  ].join('\n');
+  await n.ev(`(() => { const t = document.getElementById('notes-text'); t.value = ${JSON.stringify(text)}; t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await n.ev(`(() => { const t = document.getElementById('notes-text'); t.setSelectionRange(t.value.length, t.value.length); t.focus(); })()`);
+  await n.click('Add dated entry'); await wait(300);
+  await n.ev(`(() => { const t = document.getElementById('notes-text'); t.setRangeText('Booted to a root shell at 115200 baud.', t.selectionStart, t.selectionEnd, 'end'); t.dispatchEvent(new Event('input', { bubbles: true })); t.blur(); })()`);
+  await wait(1500);                                          // the notes save while typing
+  await n.shot('notes');
+  await n.close();
 }
 
 async function logic() {
@@ -91,17 +128,36 @@ async function logic() {
 }
 
 async function agent() {
-  await authed('/api/settings', { assistant: 'on' });
-  await authed('/api/assistant/settings', { profiles: { local: { base_url: 'http://127.0.0.1:8767/v1', model: 'pcbv-fake-model' } } });
+  // A tricky problem: the console was opened at the wrong speed, so the boot log is junk. The question gives
+  // the assistant a misleading hint (the wiring looks fine); the logic capture decoded at 115200 baud and
+  // the readings are on the board for it to find.
+  const c = await open(await panel('console'), 1200, 700);
+  await c.choose('#serial-baud', '57600');
+  await c.ev(`document.getElementById('serial-connect').click()`); await wait(10000);
+  await c.ev(`document.getElementById('serial-connect').click()`); await wait(800);
+  await c.close();
+  // PCBV_AGENT_BASE_URL and PCBV_AGENT_MODEL put a real model on the Quick profile; its key comes from the
+  // keyring, as in the app. PCBV_AGENT_PRICES=in/out gives its dollars per million tokens, so the shot shows the
+  // real cost. Without them the Local profile asks pcbv fake-model.
+  const real = process.env.PCBV_AGENT_MODEL;
+  const profile = real ? 'tutor' : 'local';
+  const [priceIn, priceOut] = (process.env.PCBV_AGENT_PRICES ?? '0/0').split('/').map(Number);
+  const target = real ? { base_url: process.env.PCBV_AGENT_BASE_URL, model: real, price_in: priceIn, price_out: priceOut }
+    : { base_url: 'http://127.0.0.1:8767/v1', model: 'pcbv-fake-model' };
+  await authed('/api/settings', { theme: 'dark', assistant: 'on' });
+  await authed('/api/assistant/settings', { profiles: { [profile]: target } });
   // One card in the shot: decline what an earlier run left open.
   const listed = await (await fetch(`${origin}/api/boards/${board}/assistant/proposals`, { headers: { Authorization: `Bearer ${advertised.token}` } })).json();
   for (const p of listed.proposals ?? []) if (p.status === 'pending') await authed(`/api/boards/${board}/assistant/proposals/${p.id}`, { action: 'decline' });
-  const a = await open(await panel('assistant'), 1200, 700);
-  await a.choose('#assistant-profile', 'local');
+  const a = await open(await panel('assistant'), 1200, 860);
+  await a.ev(`document.querySelector('#assistant-profile [data-profile="${profile}"]')?.click()`); await wait(300);
   await a.click('New chat'); await wait(500);
-  await a.ev(`(() => { document.getElementById('assistant-input').value = 'Read the boot log and propose a command that lists the flash partitions: \`cat /proc/mtd\`'; document.getElementById('assistant-send').click(); })()`);
-  await wait(5000);
+  await a.ev(`(() => { document.getElementById('assistant-input').value = 'The console only shows junk characters. TX on J4 reads 3.12 V, so the wiring looks fine. Check the captures. What is wrong?'; document.getElementById('assistant-send').click(); })()`);
+  // The Send button stays off until the answer is complete.
+  for (let s = 0; s < 180; s++) { await wait(1000); if (s > 2 && !(await a.ev(`document.getElementById('assistant-send').disabled`))) break; }
+  await wait(500);
   await a.ev(`document.querySelectorAll('#assistant-log details').forEach((d) => { d.open = true; })`); await wait(300);
+  console.log('answer chars:', await a.ev(`document.getElementById('assistant-log').textContent.length`));
   await a.shot('agent');
   await a.close();
   await authed('/api/settings', { assistant: 'off' });
@@ -122,7 +178,8 @@ async function wiki() {
 ws.onopen = async () => {
   await send('session.new', { capabilities: {} });
   try {
-    for (const take of [workbench, logic, agent, wiki]) await take();
+    const only = process.env.PCBV_SHOTS?.split(',');
+    for (const take of [workbench, notes, logic, agent, wiki]) if (!only || only.includes(take.name)) await take();
   } finally {
     await send('session.end', {});
   }

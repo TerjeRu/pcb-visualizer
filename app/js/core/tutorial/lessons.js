@@ -242,7 +242,7 @@ export const LESSONS = [
   },
   {
     id: 'export', chapter: 4, title: 'Take it with you',
-    body: ['In the Board panel, export a report: the annotated photo, the pinout and your notes.'],
+    body: ['In the Board panel, choose Export, then export a report: the annotated photo, the pinout and your notes.'],
     tasks: [task('exported', 'Export a report')], panels: panel('board'), wiki: 'method-and-ethics',
     why: ['A report keeps the work after the practice board is gone. Exports hide serial numbers and passwords when redaction is on. Leave it on.'],
     example: { question: 'Is the exported report safe to share?', answer: 'Leave redaction on: it hides passwords, serial numbers and MAC addresses that it recognises in the logs. Read the report before you share it anyway, because redaction finds known patterns, not everything.' },

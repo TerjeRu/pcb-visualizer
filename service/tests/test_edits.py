@@ -1,5 +1,6 @@
 import json
 import urllib.request
+from pathlib import Path
 
 import pytest
 
@@ -35,6 +36,26 @@ def project_with_j4():
 def test_readings_parse_the_way_a_meter_shows_them(text, mode, value, unit, shown):
     reading = parse_reading(text)
     assert (reading["mode"], reading["value"], reading["unit"], reading["text"]) == (mode, value, unit, shown)
+
+
+READINGS = json.loads((Path(__file__).parent / "fixtures" / "readings.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("case", READINGS["parse"], ids=lambda case: repr(case["input"]))
+def test_the_shared_reading_fixture_matches_the_parser(case):
+    """app/tests/reading.test.mjs runs the same file through the app's parser."""
+    if "error" in case:
+        with pytest.raises(EditError) as raised:
+            parse_reading(case["input"])
+        assert str(raised.value) == case["error"]
+    else:
+        assert parse_reading(case["input"]) == case["expect"]
+
+
+@pytest.mark.parametrize("case", READINGS["events"], ids=lambda case: f"{case['input']}-{case['powered']}")
+def test_the_shared_fixture_matches_the_power_and_warnings(case):
+    _, reading, warnings = reading_event(project_with_j4(), "J4", 1, case["input"], case["powered"])
+    assert {"powered": reading["powered"], "warnings": warnings} == case["expect"]
 
 
 @pytest.mark.parametrize("text", ["lots", "3.3A", "", "V"])
@@ -105,6 +126,26 @@ def test_cli_edits_the_board_folder_when_no_service_runs(board_with_j4, capsys):
         assert pin["readings"][0]["text"] == "3.31 V"
         assert board.project["meta"]["notes"].endswith("UART found")
         assert board.events[-1]["actor"] == "cli"
+
+
+def test_cli_takes_a_value_with_a_minus_sign_as_the_value(board_with_j4, capsys):
+    root = board_with_j4
+    assert cli.main(["--root", str(root), "measure", "nimbus", "J4", "1", "-5k"]) == 1
+    assert capsys.readouterr().err == "pcbv: a resistance cannot be negative; write it like 0.3ohm or 4.7k\n"
+    with Board.open(root / "nimbus") as board:
+        assert board.project["schematics"][0]["pins"] == []
+    assert cli.main(["--root", str(root), "measure", "nimbus", "J4", "1", "-3.3V", "--powered"]) == 0
+    with Board.open(root / "nimbus") as board:
+        assert board.project["schematics"][0]["pins"][0]["readings"][0]["text"] == "-3.3 V"
+
+
+def test_cli_note_that_would_pass_the_notes_limit_is_refused(board_with_j4, capsys):
+    root = board_with_j4
+    with Board.open(root / "nimbus") as board:
+        board.apply({"type": "project/metaUpdated", "patch": {"notes": "n" * 100_000}}, "test")
+    assert cli.main(["--root", str(root), "note", "nimbus", "one more"]) == 1
+    err = capsys.readouterr().err
+    assert "notes longer than 100000 characters" in err and "Traceback" not in err
 
 
 def test_cli_errors_are_one_line(board_with_j4, capsys):

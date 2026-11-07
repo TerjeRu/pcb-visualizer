@@ -58,7 +58,7 @@ point. Markdown supports paragraphs, `-` and `1.` lists, `**bold**`, `*italic*` 
 
 | kind | parameters | passes when |
 |---|---|---|
-| `photos` | `min` (1), `side` (front, back, detail, other) | at least `min` photos, of that side if given |
+| `photos` | `min` (1), `side` (front, back, detail, other) | at least `min` photos; with `side`, only photos that have that side (older boards) |
 | `meta` | `field` | that board detail (for example `device`) is filled in |
 | `markers` | `min` (1) | at least `min` markers are drawn |
 | `pin_role` | `roles` | some pin has one of these roles |
@@ -93,7 +93,7 @@ phases add commands that change hardware, those gates are enforced by the servic
 ## Progress
 
 Progress is board data, stored with `playbook/updated` events in the board journal:
-`project.playbooks[<id>].steps[<step>] = { gates, answers, done }`. It shows up in the change feed,
+`project.playbooks[<id>].steps[<step>] = { gates, answers, done }`. It shows up in the Timeline,
 survives restarts, and goes into git with `pcbv sync`.
 
 **Reopen step** clears one step's done mark and keeps its ticks. **Start this playbook over**, at the

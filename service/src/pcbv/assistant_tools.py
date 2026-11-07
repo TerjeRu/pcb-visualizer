@@ -96,6 +96,13 @@ def _find_photo(project: dict, ref: Any) -> dict | None:
     return next((a for a in photos if ref in (str(a.get("id")).lower(), str(a.get("label") or "").lower())), None)
 
 
+def _no(what: str, value: Any) -> str:
+    """The text for a missing thing: `no capture given` when the model left the argument out."""
+    if value is None or not str(value).strip():
+        return f"no {what} given"
+    return f"no {what} {value!r}"
+
+
 def _find_header(project: dict, ref: Any) -> tuple[dict | None, dict | None]:
     """The schematic and its marker for a header label, name or id."""
     ref = str(ref or "").strip().lower()
@@ -175,7 +182,7 @@ def get_capture(ctx: ToolContext, args: dict) -> dict:
     captures = project.get("captures") or []
     cap = next((c for c in captures if c.get("id") == args.get("id")), None)
     if cap is None:
-        return {"error": f"no capture {args.get('id')!r}", "available": [c.get("id") for c in captures][-15:]}
+        return {"error": _no("capture", args.get("id")), "available": [c.get("id") for c in captures][-15:]}
     path, channel = cap.get("path"), None
     if cap.get("kind") == "logic":
         decoded = cap.get("decoded") or []
@@ -239,7 +246,7 @@ def explain_step(ctx: ToolContext, args: dict) -> dict:
     playbooks, _ = load_playbooks(ctx.playbooks_dir)
     pb = next((p for p in playbooks if p["id"] == args.get("playbook")), None)
     if pb is None:
-        return {"error": f"no playbook {args.get('playbook')!r}", "available": [p["id"] for p in playbooks]}
+        return {"error": _no("playbook", args.get("playbook")), "available": [p["id"] for p in playbooks]}
     record = ((ctx.project().get("playbooks") or {}).get(pb["id"]) or {}).get("steps") or {}
     if not args.get("step"):
         return {"playbook": pb["id"], "title": pb["title"], "summary": pb["summary"],
@@ -247,7 +254,7 @@ def explain_step(ctx: ToolContext, args: dict) -> dict:
                           for s in pb["steps"]]}
     step = next((s for s in pb["steps"] if s["id"] == args.get("step")), None)
     if step is None:
-        return {"error": f"no step {args.get('step')!r}", "available": [s["id"] for s in pb["steps"]]}
+        return {"error": _no("step", args.get("step")), "available": [s["id"] for s in pb["steps"]]}
     state = record.get(step["id"]) or {}
     return {"playbook": pb["id"], "step": step["id"], "title": step["title"], "why": step["why"], "do": step["do"],
             "gates": [g["text"] for g in step["gates"]], "checks": [c["text"] for c in step["checks"]],
@@ -304,7 +311,7 @@ def view_photo(ctx: ToolContext, args: dict) -> dict:
     if args.get("header"):
         sch, marker = _find_header(project, args["header"])
         if marker is None:
-            return {"error": f"no marked header {args['header']!r}"}
+            return {"error": _no("marked header", args["header"])}
         asset = next((a for a in project.get("assets") or [] if a.get("id") == marker.get("assetId")), None)
         if asset is not None:
             region = marker_region(marker, asset)
@@ -358,7 +365,7 @@ def suggest_pin_roles(ctx: ToolContext, args: dict) -> dict:
         return {"error": "suggestions are not available"}
     sch, marker = _find_header(ctx.project(), args.get("header"))
     if sch is None:
-        return {"error": f"no header {args.get('header')!r}; mark it on the photo first or use its label"}
+        return {"error": f"{_no('header', args.get('header'))}; mark it on the photo first or use its label"}
     count = (sch.get("rows") or 1) * (sch.get("cols") or 1)
     given = args.get("pins")
     if not isinstance(given, list) or not given:

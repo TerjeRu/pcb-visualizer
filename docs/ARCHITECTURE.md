@@ -44,9 +44,10 @@ dock.js           panels in regions and windows, from core/layout.js
 panelbus.js       actions between windows: acknowledgements, board and generation checks
 shell.js          panel windows in the desktop app (Tauri)
 *view.js          one file per panel; they render from state and send events
-boardview.js      the Board panel, wired from boardstate.js (selection and zoom), photoview.js (tabs, zoom,
-                  upload, contents list), overlay.js (markers, callouts, pointer tools), inspector.js
-                  (header and pin) and calloutform.js
+boardview.js      the Board panel, wired from boardstate.js (selection and zoom), photoview.js (tabs, photo menu,
+                  zoom and pan, upload, drop and paste, contents list), overlay.js (markers, callouts, resize
+                  handles, arrow-key moves, pointer tools), inspector.js (header and pin) and calloutform.js
+popupmenu.js      one popup menu under a button, with the menu keys; the photo menu uses it
 core/             pure code: apply, checks, format, layout, markdown, schema, terminal, timeline
 core/tutorial/    the tutorial as data and pure functions: lessons, facts, policy, the simulated bench (meter, wiring)
                   and consolefacts (what the Console showed, derived from text the board sent)

@@ -69,6 +69,9 @@ const ACTIONS = {
   'logic-decode': [15, 16],
   'logic-compare': [16],
   export: [18],
+  reveal: [],
+  'photo-rotate': [],
+  undo: [],
 };
 
 export const ACTION_NAMES = Object.keys(ACTIONS);

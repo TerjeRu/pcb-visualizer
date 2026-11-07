@@ -3,29 +3,33 @@ from __future__ import annotations
 
 import asyncio
 import mimetypes
+from pathlib import Path
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
 from ..events import EventConflict, EventError, validate_asset_path
-from ..export import FORMATS as EXPORT_FORMATS, ExportError, default_folder, export_board
+from ..export import FORMATS as EXPORT_FORMATS, ExportError, default_folder, export_board, export_root
 from ..journal import StorageError
-from ..photos import discard, ingest, resolve_file
+from ..geometry import turn_events
+from ..photos import discard, ingest, resolve_file, rotate
+from ..reveal import reveal
 from .body import body_json, body_limit, read_body
-from .errors import error
+from .errors import NotFound, error
 from .state import State, submit
 
 router = APIRouter()
 
 
 @router.post("/api/boards/{slug}/assets", status_code=201)
-async def upload_photo(slug: str, request: Request, state: State, label: str = "", side: str = "front"):
+async def upload_photo(slug: str, request: Request, state: State, label: str = ""):
     """Raw image bytes in the body. Stores the files, then records them with an asset/added event."""
     entry = state.registry.get(slug)
     directory = entry.board.files
+    photos = sum(1 for a in entry.board.project.get("assets", []) if a.get("kind", "image") == "image")
     async with read_body(request, body_limit(request.url.path)) as data:
-        asset = await asyncio.to_thread(ingest, directory, data, label=label, side=side)
+        asset = await asyncio.to_thread(ingest, directory, data, label=label.strip() or f"Photo {photos + 1}")
     try:
         stored = await submit(entry, {"type": "asset/added", "asset": asset}, "http")
     except StorageError as exc:
@@ -34,6 +38,39 @@ async def upload_photo(slug: str, request: Request, state: State, label: str = "
         raise
     except (EventError, EventConflict):
         discard(directory, asset)
+        raise
+    return {"event": stored}
+
+
+@router.post("/api/boards/{slug}/assets/{asset_id}/rotate")
+async def rotate_photo(slug: str, asset_id: str, request: Request, state: State):
+    """Body {"turns": 1} (right) or {"turns": -1} (left). Writes a turned copy, then one board/batch
+    that moves the photo's markers, callouts, header grids and component boxes with it."""
+    entry = state.registry.get(slug)
+    turns = (await body_json(request)).get("turns")
+    if isinstance(turns, bool) or not isinstance(turns, int) or turns not in (1, -1):
+        raise EventError("turns must be 1 (rotate right) or -1 (rotate left)")
+    asset = next((a for a in entry.board.project["assets"] if a.get("id") == asset_id), None)
+    if asset is None:
+        raise NotFound(f"There is no photo {asset_id}.")
+    if not asset.get("width") or not asset.get("height"):
+        raise EventConflict("This photo has no recorded size, so it cannot be rotated.")
+    turn_events(entry.board.project, asset_id, turns, asset["path"])     # refuses a photo with too many marks first
+    directory = entry.board.files
+    path = await asyncio.to_thread(rotate, directory, asset, turns)
+    seen = {key: asset.get(key) for key in ("path", "width", "height", "rotation")}
+
+    def build(project):
+        current = next((a for a in project["assets"] if a.get("id") == asset_id), None)
+        if current is None or {key: current.get(key) for key in seen} != seen:
+            raise EventConflict("The photo changed while it was rotated. Try again.")
+        return {"type": "board/batch", "events": turn_events(project, asset_id, turns, path)}
+    try:
+        stored = await submit(entry, build, "http")
+    except BaseException as exc:
+        # Only commit_unknown may have recorded the new copy; every other failure left it unused.
+        if not (isinstance(exc, StorageError) and exc.code == "commit_unknown"):
+            discard(directory, {"path": path})
         raise
     return {"event": stored}
 
@@ -52,6 +89,20 @@ async def export(slug: str, request: Request, state: State):
                                      playbooks_dir=state.playbooks_dir)
     return {"folder": str(result.folder), "files": result.files, "redacted": result.redacted,
             "counts": result.counts, "photosToCheck": result.photos_to_check}
+
+
+@router.post("/api/exports/reveal")
+async def reveal_export(request: Request, state: State):
+    """Open an export folder in the file manager. Only a folder directly under the export root is opened."""
+    data = await body_json(request)
+    folder = data.get("folder")
+    if not isinstance(folder, str) or not folder or "\0" in folder:
+        return error(400, "bad_path", "The folder must be text.")
+    root = export_root().expanduser().resolve()
+    target = Path(folder).resolve()
+    if target.parent != root or not target.is_dir():
+        return error(400, "bad_path", "The app opens only an export folder.")
+    return {"opened": await asyncio.to_thread(reveal, target)}
 
 
 @router.get("/api/boards/{slug}/files/{path:path}")

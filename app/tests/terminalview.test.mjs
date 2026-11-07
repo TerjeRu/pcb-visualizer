@@ -58,3 +58,36 @@ test('a socket from before a board switch cannot touch the new session', () => {
   sockets[1].onclose({ code: 1000 });
   assert.equal(doc.getElementById('terminal-start').hidden, false);
 });
+
+test('the screen is a short band until a session starts, grows before it is fitted, and folds again on a board switch', () => {
+  const dom = new JSDOM(html, { runScripts: 'outside-only' });
+  const win = dom.window;
+  const doc = win.document;
+  const tab = doc.getElementById('tab-terminal');
+  const log = [];
+  win.Terminal = class { loadAddon() {} open() {} onData() {} onResize() {} reset() {} focus() {} write() {} };
+  win.FitAddon = { FitAddon: class { fit() { log.push(`fit:${tab.classList.contains('folded') ? 'folded' : 'tall'}`); } } };
+  const sockets = [];
+  win.WebSocket = class { constructor() { sockets.push(this); } send() {} close() {} };
+  const view = createTerminalView(doc, { terminalTarget: () => ({ url: 'ws://x/term', token: 't' }) });
+  assert.equal(tab.classList.contains('folded'), true, 'no session yet');
+  doc.getElementById('terminal-start').click();
+  assert.equal(tab.classList.contains('folded'), false);
+  assert.ok(log.length > 0 && log.every((entry) => entry === 'fit:tall'), `fit ran after the screen grew: ${log}`);
+  sockets[0].onclose({ code: 1000 });
+  assert.equal(tab.classList.contains('folded'), false, 'the text of a finished session stays readable');
+  view.reset();
+  assert.equal(tab.classList.contains('folded'), true, 'a board switch starts clean');
+});
+
+test('a Start that cannot begin leaves the screen folded', () => {
+  const dom = new JSDOM(html, { runScripts: 'outside-only' });
+  const win = dom.window;
+  const doc = win.document;
+  win.Terminal = class { open() {} onData() {} onResize() {} reset() {} focus() {} write() {} };
+  win.WebSocket = class {};
+  createTerminalView(doc, { terminalTarget: () => null });
+  doc.getElementById('terminal-start').click();
+  assert.equal(doc.getElementById('tab-terminal').classList.contains('folded'), true);
+  assert.equal(doc.getElementById('terminal-status').textContent, 'Choose a board first.');
+});

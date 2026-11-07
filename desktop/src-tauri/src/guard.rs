@@ -17,8 +17,8 @@ use crate::service::ServiceAddress;
 pub const PANELS: [&str; 11] = [
     "board",
     "inspector",
-    "feed",
     "photo",
+    "notes",
     "playbook",
     "wiki",
     "console",
@@ -173,6 +173,7 @@ mod tests {
             .iter()
             .all(|label| label.starts_with("panel-") && !label.contains('*')));
         assert!(labels.contains(&"panel-console".to_string()));
+        assert!(labels.contains(&"panel-notes".to_string()));
     }
 
     #[test]

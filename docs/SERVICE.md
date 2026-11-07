@@ -35,14 +35,23 @@ One JSON object per line:
 |---|---|---|
 | `project/created` | `project` | no, first event of every journal |
 | `project/replaced` | `project` | no, written when the file was edited outside the service |
-| `project/metaUpdated` | `patch` (cannot touch `id` or `created`) | yes |
-| `asset/added` `asset/updated` `asset/removed` | `asset` or `id`, `patch` | yes |
+| `project/metaUpdated` | `patch` (cannot touch `id` or `created`; `notes` has at most 100,000 characters) | yes |
+| `asset/added` `asset/updated` `asset/removed` | `asset` or `id`, `patch` (an `asset/updated` `label` has at most 80 characters) | yes |
 | `marker/added` `marker/updated` `marker/removed` | `marker`, optional `schematic`, or `id`, `patch` | yes |
 | `schematic/updated` | `id`, `patch` | yes |
 | `board/batch` | `events` (1 to 256 ordinary payloads) | yes, atomic group |
 | `pin/readingAdded` | `schematicId`, `index`, `reading` | yes, append one reading |
 | `pin/updated` | `schematicId`, `index`, `patch` or `null` | yes |
 | `components/replaced` | `components` | yes |
+
+Undo in the app writes ordinary events with two optional fields. A patch event (`project/metaUpdated`,
+`asset/updated`, `marker/updated`, `schematic/updated`, `annotation/updated` or `playbook/updated`) can
+carry `unset`: 1 to 64 key names that the reducer removes after the patch. A key cannot be in `patch` and
+`unset` at the same time, and a protected key cannot be unset. A `playbook/updated` with `unset` also
+removes the step, then the `steps` object, then the playbook record when it leaves them empty.
+`asset/added`, `marker/added` and `annotation/added` can carry `at`, the position in the list, and
+`marker/added` can carry `schematicAt` for its header. A position past the end of the list is 409. Without
+these fields, the item goes to the end of the list.
 
 The front end applies the same events with `app/js/core/apply.js`, a port of `service/src/pcbv/reducer.py`. `tests/test_client_parity.py` runs both over one script and over real journals and compares the full project after every step. If you change either reducer, that test tells you whether they still agree.
 
@@ -136,10 +145,12 @@ persistent warnings and disables mutation controls when writable is false.
 | `POST /api/boards` `{name}` | create, 201 `{slug, seq}`, 409 if the folder exists |
 | `POST /api/tutorial/board` | the tutorial's practice board: create it if it is missing, 201 `{slug: "pcbv-tutorial"}` either way. Needs the token like every route; see Practice board below |
 | `POST /api/tutorial/board/reset` | delete the practice board and build it again, 201 `{slug}`. 409 `session_open` while a serial or terminal session is open on it |
-| `GET /api/boards/{slug}` | `{seq, project, warnings, storage}` |
+| `GET /api/boards/{slug}` | `{seq, project, warnings, storage, directory}`; `directory` is the board folder on disk |
+| `POST /api/boards/{slug}/reveal` | open the board folder in the file manager with `xdg-open`; no body. Answers `{opened}`, or 501 `no_file_manager` with the install command when `xdg-open` is missing. `PCBV_NO_REVEAL=1` answers `{opened: false}` and starts nothing (the tests set it) |
 | `GET /api/boards/{slug}/events?since=N` | events after `seq` N |
 | `POST /api/boards/{slug}/events` `{event, actor?}` | apply, 201 `{event}`; `actor` is `web`, `cli`, `http` (default) or `ws`, anything else is 422 |
-| `POST /api/boards/{slug}/assets?side=&label=` raw image body | add a photo (up to 40 MB), 201 `{event}` with the `asset/added` it recorded |
+| `POST /api/boards/{slug}/assets?label=` raw image body | add a photo (up to 40 MB); the label defaults to "Photo N", 201 `{event}` with the `asset/added` it recorded |
+| `POST /api/boards/{slug}/assets/{id}/rotate` `{turns}` | turn a photo by a quarter: `turns` is 1 (right, clockwise) or -1 (left). The body is limited to 64 bytes. It writes a new copy, then records one `board/batch` that updates the asset (`path`, swapped `width` and `height`, `rotation`) and turns its markers, callouts, component boxes and the grids of headers whose boxes are all on this photo. 200 `{event}`; 404 for a missing photo; 409 when the photo has no size or changed while it was turned; 422 for another `turns` or a photo that needs more than 256 changes |
 | `GET /api/boards/{slug}/files/{path}` | a file under `assets/`, for the app's photo view |
 | `GET /api/boards/{slug}/commits` | `{commits: [{hash, date, subject}]}` for the board folder, newest first, empty outside a git repo and while `git` is `off` |
 | `GET /api/serial/ports` | `{ports, bauds, sessions}`: USB serial adapters and the `pcbv vdev` board |
@@ -180,6 +191,8 @@ persistent warnings and disables mutation controls when writable is false.
 | `GET /api/playbooks` | `{playbooks, problems}`: built-in and data repo playbooks, read from disk on each call (format in `docs/PLAYBOOKS.md`) |
 
 Photo uploads accept JPEG, PNG and WebP. The service checks the image (with a pixel limit against decompression bombs), keeps the original at `assets/photos/originals/<id>.<ext>`, and writes an upright copy of at most 2560 px on its long side, JPEG, without EXIF (so no GPS position), at `assets/photos/<id>.jpg`. The asset points at the copy and records its size, so markers are in the copy's pixels; `original` records where the original is. The data repo ignores `originals/`. Files need the token like every other route, so the app fetches them and shows them as blob URLs.
+
+A turn makes the copy again from the original (upright, scaled, turned by the new total `rotation`, quality 85), so turns add no JPEG loss. Without the original, as on a board cloned from git, the stored copy is turned at quality 95. The batch is built under the board lock from the current project, after an outside edit of `project.pcb.json` is taken in, so a change made while the image was turned is not lost. If the turn fails, the new copy is removed and the old one stays.
 
 Every error is `{error, message}`: 400 bad name or bad request, 401, 403 host or origin, 404 `not_found` (also an unknown route), 405, 409 conflict or exists, 413 `too_large`, 422 (`invalid_event`, `invalid_photo`, `invalid_capture`, `bad_request` for a malformed query or field), 423 board open in another process, 429 `work_busy`, 500 `internal_error`, 503 not_committed, commit_unknown or recovery_required for storage failures, including an unusable journal on first open.
 
@@ -233,7 +246,7 @@ its own events, so a client cannot write an event as one of them.
 ## WebSocket `/api/boards/{slug}/ws`
 
 1. Client sends `{"op":"auth","protocol":2,"token":...,"actor":"web","sinceSeq":N}` within 5 seconds. Anything else closes with code 4401. An `actor` that is not one of the four client actors gets an `error` and code 4400.
-2. If `sinceSeq` is an integer in `0..seq`, the server sends `{"op":"ready","mode":"resume","seq":S,"storage":{...}}` then every event after N. Otherwise it sends `{"op":"snapshot","seq":S,"project":{...},"recent":[...],"storage":{...}}`, where `recent` is up to the last 50 events, for the change feed. The client is added to the live stream in the same step, so nothing is missed or sent twice.
+2. If `sinceSeq` is an integer in `0..seq`, the server sends `{"op":"ready","mode":"resume","seq":S,"storage":{...}}` then every event after N. Otherwise it sends `{"op":"snapshot","seq":S,"project":{...},"recent":[...],"storage":{...}}`, where `recent` is up to the last 50 events. The app no longer reads it. The client is added to the live stream in the same step, so nothing is missed or sent twice.
 3. Server pushes `{"op":"event","event":{...}}` for every applied event, in the same order for every client. An outside edit found on the way arrives as its own `project/replaced` event first.
 4. Client sends `{"op":"apply","id":"c1","event":{...}}` and gets `{"op":"ack","id":"c1","seq":N,"warnings":[],"storage":{...}}` or `{"op":"error","id":"c1","code":"invalid_event"|"conflict","message":...}`. `{"op":"ping"}` returns `pong`.
 5. Messages that are not project state arrive on the same socket: `serial` and `serial-data` for the console, `settings` when the app settings change in any window.
@@ -285,9 +298,9 @@ The other commands (`open`, `note`, `measure`, `shell`, `repo`, `sync`, `agents-
 
 The same value always gets the same stand-in within one copy. Photos are turned upright from their EXIF orientation and re-encoded without EXIF, XMP or ICC data and listed under "Check by eye", since printed labels cannot be found automatically. Never copied: `.pcbv/`, photo originals, symbolic links, files over 20 MB, and binary files other than photos. Logic captures (`.sr`) are copied only with `--include-logic`, since their raw samples cannot be redacted. `--check` reports without writing. The target folder must not exist and must not be inside the board folder.
 
-## Export (`pcbv export`, the Board panel)
+## Export (`pcbv export`, the Export dialog in the Board panel)
 
-`export.py` writes a new folder, by default `~/pcbv-exports/<board>-<date>-<time>` (`$PCBV_EXPORT_DIR` changes the base). It refuses a folder inside the board folder or the data repo, and an existing one. `POST /api/boards/{slug}/export` `{formats?, redact?}` answers `{folder, files, redacted, counts, photosToCheck}`; the Board panel's Export section calls it.
+`export.py` writes a new folder, by default `~/pcbv-exports/<board>-<date>-<time>` (`$PCBV_EXPORT_DIR` changes the base). It refuses a folder inside the board folder or the data repo, and an existing one. `POST /api/boards/{slug}/export` `{formats?, redact?}` answers `{folder, files, redacted, counts, photosToCheck}`; the Board panel's Export section calls it. `POST /api/exports/reveal` `{folder}` (body limit 4096 bytes) opens that folder in the file manager, only when its resolved path is a directory directly under the export root (`~/pcbv-exports` or `$PCBV_EXPORT_DIR`); anything else is 400 `bad_path`. It starts `xdg-open` and honours `PCBV_NO_REVEAL` like the board route. The result line has an **Open folder** button for it.
 
 | Format | File | Contents |
 |---|---|---|
@@ -336,7 +349,7 @@ Opening a real adapter needs membership of the `uucp` group (`sudo usermod -aG u
 - At most two questions run at once (one per board and conversation). When the window that asked goes away, no further model call or tool runs; the current call finishes, and the turn keeps its place until it has.
 - Usage and cost per profile are kept in `~/.config/pcbv/assistant-usage.json`.
 - A command proposed twice in one answer gives one card. `get_capture` reads at least 2000 characters (8000 by default), because models otherwise page through a short boot log 200 characters at a time.
-- `view_photo` (`vision.py`) shows the whole photo, a region, or the area around a marked header, at most 1568 pixels on the long side, with a light grid labelled in percent of the whole photo. Close-ups are cut from the original in `assets/photos/originals/`, so markings stay readable. A tool result can only be text, so the picture follows in a message from the app after the round's tool results; once the answer is in, the picture is replaced by a one-line note so later questions do not send it again. Each profile has a `photos` switch; with it off the model gets no `view_photo` tool. It is on by default only for a server on this machine. For any other server a missing value means off, and the choice does not carry over when the profile moves to another scheme, host or port.
+- `view_photo` (`vision.py`) shows the whole photo, a region, or the area around a marked header, at most 1568 pixels on the long side, with a light grid labelled in percent of the whole photo. Close-ups are cut from the original in `assets/photos/originals/`, so markings stay readable; the original is turned by the photo's `rotation` first. A tool result can only be text, so the picture follows in a message from the app after the round's tool results; once the answer is in, the picture is replaced by a one-line note so later questions do not send it again. Each profile has a `photos` switch; with it off the model gets no `view_photo` tool. It is on by default only for a server on this machine. For any other server a missing value means off, and the choice does not carry over when the profile moves to another scheme, host or port.
 - `suggest_label` and `suggest_pin_roles` make cards like `propose_command` does. Each needs a grade (`high`: a marking or silkscreen says so, `medium`: strong visual clues, `low`: a plausible guess) and the evidence. Accepting a card writes `annotation/added` or `pin/updated` events with a `guess` record (see `docs/SCHEMA.md`); a guessed pin role is stored next to the pin, never as its `role`. The app shows guesses as unverified until the person checks them.
 - The system prompt follows the Guided/Expert setting: Guided explains terms, Expert is brief and technical. The safety rules are the same in both.
 
@@ -373,7 +386,7 @@ Starter pages ship in `service/src/pcbv/wiki/`, grouped by `contents.yaml` into 
 
 `pcbv measure <board> <header> <pin> <value>` records a multimeter reading. The header is found by its marker's silkscreen label or its own name, ignoring case. Values are written as the meter shows them: `3.29V`, `330mV`, `0.3ohm`, `4.7k`, `1.2MΩ`, `OL` or `beep`. Volts mean the board was powered, resistance and continuity mean it was unplugged; `--powered` / `--unpowered` override that, and the unsafe combinations print a warning. The reading is appended to the pin's `readings` (see `docs/SCHEMA.md`) with a `pin/readingAdded` event.
 
-`pcbv note <board> "text"` appends a line stamped with local time to the board notes; `--pin J4:2` appends it to that pin's note instead.
+`pcbv note <board> "text"` appends a line stamped with local time to the board notes; `--pin J4:2` appends it to that pin's note instead. The board notes have at most 100,000 characters: a line that would pass the limit is refused with an error. An open Notes panel shows the new line when the person is not typing. If the person is typing, the panel keeps its text and the next save replaces the line, because the app does not merge edits (one user, one board).
 
 Both go through the running service when there is one (it holds the board lock, and open apps update live) and edit the board folder directly otherwise.
 

@@ -16,7 +16,7 @@ import { PANELS } from './core/layout.js';
 import { isBoardSlug } from './session.js';
 
 export const CHANNEL_NAME = 'pcbv-panels';
-export const ACTIONS = new Set(['ask', 'wiki', 'jump']);
+export const ACTIONS = new Set(['ask', 'wiki', 'jump', 'notes']);
 export const MAX_MESSAGE_BYTES = 64 * 1024;
 export const ACK_TIMEOUT_MS = 2000;
 // How long after start the main window waits for panel windows to answer its main-start with hello.

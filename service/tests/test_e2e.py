@@ -39,7 +39,10 @@ def test_real_process_serves_the_app_and_the_real_client_edits_a_board(service):
     out = json.loads(result.stdout)
     assert "bench-router" in out["boards"]
     assert out["status"] == "live" and out["notes"] == "from the real client"
+    # undo and redo through the socket: the client had the board around the change when it was confirmed
+    assert out["undone"] == "" and out["redone"] == "from the real client" and out["stillThere"] is True
 
     # the edit really reached the journal on disk, attributed to the client's actor
     events = [json.loads(line) for line in (boards / "bench-router" / "journal" / "events.jsonl").read_text().splitlines()]
+    assert [e["patch"]["notes"] for e in events[-3:]] == ["from the real client", "", "from the real client"]
     assert events[-1]["type"] == "project/metaUpdated" and events[-1]["actor"] == "ws"

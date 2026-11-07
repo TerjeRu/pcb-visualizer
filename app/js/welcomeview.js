@@ -25,7 +25,7 @@ export function createWelcomeView(doc, handlers) {
 
   let tutorial = { state: 'new', step: 1 };
   $('welcome-tutorial').addEventListener('click', () => handlers.startTutorial?.({ resume: tutorial.state === 'started' }));
-  $('welcome-create').addEventListener('click', () => $('new-board-name').focus());
+  $('welcome-create').addEventListener('click', () => handlers.onNewBoard());
   $('welcome-start').addEventListener('click', () => handlers.onReadPage?.('start-here', 'welcome-start'));
   $('welcome-needs').addEventListener('click', () => handlers.onReadPage?.('what-you-need', 'welcome-needs'));
   $('welcome-git').addEventListener('click', () => handlers.onOpenSettings?.('git'));
@@ -36,7 +36,7 @@ export function createWelcomeView(doc, handlers) {
     catch (error) { handlers.showError?.(error.message); return; }
     opened = false;
     draw();
-    $('new-board-name').focus();
+    handlers.onNewBoard();
   });
   $('welcome-back').addEventListener('click', () => handlers.backFromWelcome?.());
 

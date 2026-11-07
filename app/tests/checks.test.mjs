@@ -21,6 +21,13 @@ test('photo, meta and marker checks', () => {
   assert.equal(evaluateCheck({ kind: 'markers', min: 2 }, board()).ok, false);
 });
 
+test('the photograph step is done with two photos of any kind, side or none', () => {
+  const two = board({ assets: [{ id: 'img_1', label: 'Front' }, { id: 'img_2', label: 'Photo 2' }] });
+  assert.deepEqual(evaluateCheck({ kind: 'photos', min: 2 }, two), { ok: true, detail: '2 of 2' });
+  assert.deepEqual(evaluateCheck({ kind: 'photos', min: 2 }, board()), { ok: false, detail: '1 of 2' });
+  assert.equal(evaluateCheck({ kind: 'photos', side: 'back', min: 1 }, two).ok, false, 'a custom playbook can still ask for a side');
+});
+
 test('pin roles name the header by its silkscreen label', () => {
   const p = withPins([{ index: 4, role: 'GND' }]);
   assert.deepEqual(evaluateCheck({ kind: 'pin_role', roles: ['GND'] }, p), { ok: true, detail: 'J4 pin 4' });

@@ -260,6 +260,18 @@ test('wiki links in the main window reach a Wiki that lives in its own window', 
   assert.deepEqual(main.calls.filter((c) => c[0] === 'page'), []);
 });
 
+test('the Board card button reaches a Notes panel that lives in its own window', async () => {
+  const connect = makeChannelHub();
+  const layout = { ...PRESETS.Learn, regions: { ...PRESETS.Learn.regions, center: ['photo'] }, detached: ['notes'], origins: { notes: { region: 'center', index: 1 } } };
+  const notesWindow = await openWindow(connect, { single: 'notes', slug: 'nimbus', generation: 0 });
+  const main = await openWindow(connect, { layout, handle: { notes: { closed: false, focus() {}, close() {} } }, generation: 10 });
+  main.view.boardChanged('nimbus');
+  main.doc.getElementById('open-notes').click();
+  await tick(); await tick(); await tick();
+  assert.equal(notesWindow.doc.activeElement.id, 'notes-text');
+  assert.equal(noticeShown(main), false);
+});
+
 test('messages for another board, or with unusable content, run nothing', async () => {
   const connect = makeChannelHub();
   const sender = connect();
@@ -362,7 +374,7 @@ test('the Ask button a playbook step draws is marked data-ai too', async () => {
   const playbook = { id: 'pb', title: 'T', steps: [{ id: 's1', title: 'One', guide: 'g', checks: [] }] };
   w.view.setPlaybooks([playbook], []);
   w.view.showBoardPanel();
-  w.view.render({ status: 'live', project: { meta: { name: 'B' }, assets: [], markers: [], schematics: [], components: [], playbooks: [] }, feed: [], error: null });
+  w.view.render({ status: 'live', project: { meta: { name: 'B' }, assets: [], markers: [], schematics: [], components: [], playbooks: [] }, error: null });
   const ask = w.doc.querySelector('.ask-assistant');
   assert.ok(ask, 'the step shows an Ask button');
   assert.equal(ask.hasAttribute('data-ai'), true);

@@ -6,6 +6,7 @@
 
 import { PANELS, PRESETS, REGIONS, activate, attach, detach, locate, move, normalize, putAway, setMode, visiblePanels } from './core/layout.js';
 import { dom } from './dom.js';
+import { createPopupMenu } from './popupmenu.js';
 
 const REGION_NAMES = { left: 'Left', center: 'Centre', right: 'Right', bottom: 'Bottom' };
 
@@ -111,20 +112,29 @@ export function createDock(doc, handlers) {
   function drawWorkspaces() {
     const names = [...new Set([...Object.keys(PRESETS), ...Object.keys(store.saved)])];
     options($('workspace-select'), names.map((name) => ({ value: name, label: name, selected: name === store.current })));
-    $('workspace-reset').disabled = !(store.current in PRESETS);
   }
 
   $('workspace-select').addEventListener('change', (event) => useWorkspace(event.target.value));
   function naming(on) {
     $('workspace-name-form').hidden = !on;
-    $('workspace-save').hidden = on;
-    $('workspace-reset').hidden = on;
+    $('workspace-menu-anchor').hidden = on;
     if (on) { $('workspace-name').value = ''; $('workspace-name').focus(); }
   }
-  $('workspace-save').addEventListener('click', () => naming(true));
-  $('workspace-name-cancel').addEventListener('click', () => { naming(false); $('workspace-save').focus(); });
+  const workspaceMenu = createPopupMenu(doc);
+  function resetLayout() {
+    if (store.current in PRESETS) setLayout(arrange(norm(PRESETS[store.current])));
+  }
+  $('workspace-menu').addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (workspaceMenu.isOpenFor(event.currentTarget)) { workspaceMenu.close({ refocus: true }); return; }
+    workspaceMenu.open(event.currentTarget, 'Workspace actions', [
+      { label: 'Save as…', run: () => naming(true) },
+      { label: 'Reset layout', run: resetLayout, disabled: !(store.current in PRESETS) },
+    ]);
+  });
+  $('workspace-name-cancel').addEventListener('click', () => { naming(false); $('workspace-menu').focus(); });
   $('workspace-name').addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') { event.preventDefault(); naming(false); $('workspace-save').focus(); }
+    if (event.key === 'Escape') { event.preventDefault(); naming(false); $('workspace-menu').focus(); }
   });
   $('workspace-name-form').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -134,9 +144,6 @@ export function createDock(doc, handlers) {
     handlers.saveWorkspaces?.(store);
     drawWorkspaces();
     naming(false);
-  });
-  $('workspace-reset').addEventListener('click', () => {
-    if (store.current in PRESETS) setLayout(arrange(norm(PRESETS[store.current])));
   });
 
   function closeMenu({ refocus = false } = {}) {

@@ -10,10 +10,12 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 
 function setup(exportBoard) {
   const doc = new JSDOM(html).window.document;
+  doc.getElementById('board-panel').hidden = false;      // as after the layout starts, so the button can take focus
+  doc.getElementById('panel-store').hidden = false;
   const calls = [];
-  createExportView(doc, { exportBoard: async (...args) => { calls.push(args); return exportBoard(...args); } });
+  const view = createExportView(doc, { exportBoard: async (...args) => { calls.push(args); return exportBoard(...args); } });
   const submit = () => doc.getElementById('export-form').dispatchEvent(new doc.defaultView.Event('submit', { cancelable: true }));
-  return { doc, calls, submit };
+  return { doc, calls, submit, view };
 }
 
 test('export sends the ticked formats, redacted by default, and says where the files went', async () => {
@@ -21,7 +23,7 @@ test('export sends the ticked formats, redacted by default, and says where the f
   submit();
   await tick();
   assert.deepEqual(calls, [[['photo', 'report', 'csv'], true]]);
-  assert.equal(doc.getElementById('export-result').textContent, '3 files in /home/t/pcbv-exports/demo. Redacted: 2 distinct values replaced.');
+  assert.equal(doc.getElementById('export-result').textContent, '3 files in /home/t/pcbv-exports/demo. Redacted: 2 distinct values replaced. Open folder');
   assert.equal(doc.getElementById('export-run').disabled, false);
 });
 
@@ -85,4 +87,45 @@ test('a finished export is reported for the tutorial, a failed one is not', asyn
   submit();
   await tick();
   assert.equal(reports, 1);
+});
+
+test('the result has an Open folder button that asks for the folder the export returned', async () => {
+  const opened = [];
+  const doc = new JSDOM(html).window.document;
+  createExportView(doc, { exportBoard: async () => ({ folder: '/x/nimbus-1', files: ['report.md'], redacted: true, counts: {} }), revealExport: (folder) => opened.push(folder) });
+  doc.getElementById('export-form').dispatchEvent(new doc.defaultView.Event('submit', { cancelable: true }));
+  await tick();
+  const button = doc.querySelector('#export-result button');
+  assert.equal(button.textContent, 'Open folder');
+  button.click();
+  assert.deepEqual(opened, ['/x/nimbus-1']);
+});
+
+test('Export… opens a dialog with the form; Close and Escape close it and the focus goes back to the button', () => {
+  const { doc } = setup(async () => ({}));
+  const dialog = doc.getElementById('export-dialog');
+  const button = doc.getElementById('export-open');
+  assert.equal(button.closest('.step-actions').contains(doc.getElementById('reveal-board')), true, 'in the actions row');
+  assert.equal(doc.getElementById('export'), null, 'the fold is gone from the Board card');
+  assert.equal(dialog.querySelector('#export-form') !== null && dialog.querySelector('#export-result') !== null, true);
+  assert.equal(dialog.open, false);
+  button.click();
+  assert.equal(dialog.open, true);
+  assert.equal(doc.activeElement.name, 'format', 'focus is inside the dialog');
+  doc.getElementById('export-close').click();
+  assert.equal(dialog.open, false);
+  assert.equal(doc.activeElement, button);
+  button.click();
+  dialog.dispatchEvent(new doc.defaultView.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(dialog.open, false);
+  assert.equal(doc.activeElement, button);
+});
+
+test('a board switch closes the dialog and clears the result', () => {
+  const { doc, view } = setup(async () => ({}));
+  doc.getElementById('export-open').click();
+  doc.getElementById('export-result').textContent = 'old board';
+  view.reset();
+  assert.equal(doc.getElementById('export-dialog').open, false);
+  assert.equal(doc.getElementById('export-result').textContent, '');
 });

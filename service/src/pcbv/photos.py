@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import io
 import os
+import re
 import secrets
 import warnings
 from pathlib import Path
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+from .events import MAX_LABEL_CHARS
 from .fsutil import Directory, File
 from .schema import ASSET_DIR
 
@@ -25,6 +27,7 @@ MAX_PIXELS = 100_000_000          # beyond this Pillow could be made to use giga
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS   # Pillow's own guard, a second line behind open_image
 COPY_LONG_SIDE = 2560
 SIDES = ("front", "back", "detail", "other")
+SAFE_STEM = re.compile(r"[A-Za-z0-9_-]{1,64}")
 EXTENSIONS = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp"}
 
 
@@ -48,9 +51,9 @@ def open_image(source) -> Image.Image:
     return image
 
 
-def ingest(board_dir: Path, data: bytes, *, label: str = "", side: str = "front") -> dict:
-    """Store an uploaded photo and return the asset for an `asset/added` event."""
-    if side not in SIDES:
+def ingest(board_dir: Path, data: bytes, *, label: str = "", side: str | None = None) -> dict:
+    """Store an uploaded photo and return the asset for an `asset/added` event. `side` is kept for older boards."""
+    if side is not None and side not in SIDES:
         raise PhotoError(f"side must be one of {', '.join(SIDES)}")
     if not data:
         raise PhotoError("the upload is empty")
@@ -77,11 +80,61 @@ def ingest(board_dir: Path, data: bytes, *, label: str = "", side: str = "front"
     with Directory(board_dir) as directory:
         directory.create_bytes(original_rel, data)
         directory.create_bytes(copy_rel, out.getvalue())
-    return {
+    asset = {
         "id": asset_id, "kind": "image", "path": copy_rel,
-        "label": label.strip()[:80] or side.capitalize(), "side": side,
+        "label": label.strip()[:MAX_LABEL_CHARS] or (side.capitalize() if side else "Photo"),
         "width": copy.width, "height": copy.height, "original": original_rel,
     }
+    if side:
+        asset["side"] = side
+    return asset
+
+
+# Pillow's transposes are counter-clockwise; a photo's rotation counts clockwise.
+CLOCKWISE = {90: Image.Transpose.ROTATE_270, 180: Image.Transpose.ROTATE_180, 270: Image.Transpose.ROTATE_90}
+
+
+def _turned_original(board_dir: Path, asset: dict, rotation: int, size: tuple[int, int]) -> Image.Image | None:
+    """The copy ingest would write, turned by `rotation`. None when the original is gone or gives another size."""
+    source = resolve_file(board_dir, asset["original"]) if asset.get("original") else None
+    if source is None:
+        return None
+    try:
+        with source.open() as handle, open_image(handle) as image:
+            upright = ImageOps.exif_transpose(image)
+            upright.thumbnail((COPY_LONG_SIDE, COPY_LONG_SIDE), Image.Resampling.LANCZOS)
+            copy = upright.convert("RGB")
+    except (PhotoError, UnidentifiedImageError, OSError, SyntaxError):
+        return None
+    if rotation:
+        copy = copy.transpose(CLOCKWISE[rotation])
+    return copy if copy.size == size else None
+
+
+def rotate(board_dir: Path, asset: dict, turns: int) -> str:
+    """Write the photo turned by a quarter (1 right, -1 left) as a new copy, and return its path.
+
+    The copy is made again from the original, so turns do not add JPEG loss. Without the original
+    (a board cloned from git) the stored copy is turned at a higher quality.
+    """
+    rotation = (asset.get("rotation", 0) + 90 * turns) % 360
+    copy, quality = _turned_original(board_dir, asset, rotation, (asset["height"], asset["width"])), 85
+    if copy is None:
+        source = resolve_file(board_dir, asset.get("path") or "")
+        if source is None:
+            raise PhotoError("the file for this photo is missing")
+        try:
+            with source.open() as handle, open_image(handle) as image:
+                copy, quality = image.convert("RGB").transpose(CLOCKWISE[90 if turns == 1 else 270]), 95
+        except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+            raise PhotoError(f"not a readable image: {exc}") from exc
+    out = io.BytesIO()
+    copy.save(out, "JPEG", quality=quality, optimize=True)
+    stem = asset["id"] if SAFE_STEM.fullmatch(asset["id"]) else "photo"     # ids come from events
+    rel = f"{PHOTO_DIR}/{stem}-{secrets.token_hex(4)}.jpg"
+    with Directory(board_dir) as directory:
+        directory.create_bytes(rel, out.getvalue())
+    return rel
 
 
 def discard(board_dir: Path, asset: dict) -> None:

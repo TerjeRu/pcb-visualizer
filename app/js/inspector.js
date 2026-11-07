@@ -2,6 +2,7 @@
 
 import { describeGuess, guessName } from './core/format.js';
 import { MAX_GRID, NUMBERING, PIN_ROLES, ROTATIONS, getPin, pinLayout, roleDef, safeColor } from './core/schema.js';
+import { MAX_READING, parseReading, readingFor } from './core/reading.js';
 import { dom } from './dom.js';
 import { describeReadings } from './viewmodel.js';
 
@@ -9,6 +10,13 @@ import { describeReadings } from './viewmodel.js';
 const ROLE_PAGES = { TX: 'uart', RX: 'uart', GND: 'ground', VCC: 'logic-levels', '3V3': 'logic-levels', '5V': 'logic-levels' };
 
 const gridSize = (v) => Math.min(Math.max(Math.round(Number(v)) || 1, 1), MAX_GRID);
+
+/** Let a text box grow with its text up to its `data-max-rows` rows (CSS caps the height), then scroll. */
+function grow(box) {
+  if (!box.style.getPropertyValue('--rows')) box.style.setProperty('--rows', box.dataset.maxRows);
+  box.style.height = 'auto';
+  if (box.scrollHeight > 0) box.style.height = `${box.scrollHeight}px`;
+}
 
 export function createInspector(doc, handlers, s, parts, draw) {
   const { $, options, setValue } = dom(doc);
@@ -54,6 +62,8 @@ export function createInspector(doc, handlers, s, parts, draw) {
     $(id).addEventListener('change', (event) => { if (s.marker() && s.schematic()) fn(event.target.value); });
   }
 
+  for (const id of ['header-notes', 'pin-note']) $(id).addEventListener('input', (event) => grow(event.target));
+
   $('marker-delete').addEventListener('click', () => removeMarker());
   $('pin-clear').addEventListener('click', () => { if (s.schematic() && s.pinIndex) clearPin(); });
   $('pin-guess-use').addEventListener('click', (event) => setPinRole(event.currentTarget.dataset.role));
@@ -65,11 +75,77 @@ export function createInspector(doc, handlers, s, parts, draw) {
     handlers.onAsk?.(`What can you tell me about pin ${s.pinIndex} of ${header}?`, { header, pin: s.pinIndex });
   });
 
+  // The Reading field keeps its text while the board redraws; it resets only when another pin is selected.
+  let readingPin = null;
+  let poweredByHand = false;
+  let sending = false;
+
+  function showReadingHint(text, kind) {
+    const hint = $('pin-reading-hint');
+    hint.textContent = text;
+    hint.dataset.kind = kind;
+    hint.hidden = !text;
+  }
+
+  // The parser's messages are written for the CLI, after "pcbv: warning:"; on their own they need a capital and a full stop.
+  const sentence = (text) => (text ? `${text[0].toUpperCase()}${text.slice(1)}${/[.!?]$/.test(text) ? '' : '.'}` : '');
+
+  // Not setValue: it skips the focused field, and after Enter the focus is still in it.
+  function resetReadingField() {
+    $('pin-reading').value = '';
+    $('pin-reading-powered').checked = false;
+    poweredByHand = false;
+    showReadingHint('', 'warning');
+  }
+
+  async function addReading() {
+    const sch = s.schematic();
+    const index = s.pinIndex;
+    if (!s.editable || !sch || !index || sending) return;
+    const text = $('pin-reading').value;
+    if (text.length > MAX_READING) {
+      showReadingHint(`A reading has at most ${MAX_READING} characters.`, 'error');
+      return;
+    }
+    let made;
+    try {
+      made = readingFor(text, poweredByHand ? $('pin-reading-powered').checked : undefined, new Date().toISOString());
+    } catch (error) {
+      showReadingHint(sentence(error.message), 'error');
+      return;
+    }
+    sending = true;
+    let stored;
+    try { stored = await handlers.onAddReading?.(sch.id, index, made.reading); } finally { sending = false; }
+    if (!stored || readingPin !== `${sch.id}:${index}`) return;
+    if ($('pin-reading').value === text) resetReadingField();
+    showReadingHint(made.warnings.map(sentence).join(' '), 'warning');
+  }
+
+  $('pin-reading').addEventListener('input', (event) => {
+    showReadingHint('', 'warning');
+    if (poweredByHand) return;
+    try { $('pin-reading-powered').checked = parseReading(event.target.value).mode === 'dc'; } catch { /* the hint comes on Add */ }
+  });
+  $('pin-reading').addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    if (!event.repeat && !event.isComposing) addReading();
+  });
+  $('pin-reading-powered').addEventListener('change', () => { poweredByHand = true; });
+  $('pin-reading-add').addEventListener('click', () => addReading());
+
   options($('pin-role'), ['', ...PIN_ROLES.map((r) => r.role)].map((role) => ({
     value: role,
     label: role ? `${role}  (${roleDef(role).key})` : '(none)',
   })));
-  $('pin-keys').textContent = `Click a pin, then press a key: ${PIN_ROLES.map((r) => `${r.key} ${r.role}`).join(', ')}. Backspace clears.`;
+  $('pin-keys').querySelector('.key-list').replaceChildren(...PIN_ROLES.map(({ key, role }) => {
+    const item = doc.createElement('li');
+    const kbd = doc.createElement('kbd');
+    kbd.textContent = key;
+    item.append(kbd, ` ${role}`);
+    return item;
+  }));
   options($('header-numbering'), Object.entries(NUMBERING).map(([value, label]) => ({ value, label })));
   options($('header-rotation'), ROTATIONS.map((deg) => ({ value: String(deg), label: `${deg}°` })));
 
@@ -100,6 +176,7 @@ export function createInspector(doc, handlers, s, parts, draw) {
       setValue($('header-numbering'), sch.numbering || 'row');
       setValue($('header-rotation'), String(sch.rotation || 0));
       setValue($('header-notes'), sch.notes);
+      grow($('header-notes'));
 
       const layout = pinLayout(sch);
       if (s.pinIndex && s.pinIndex > layout.pins.length) s.pinIndex = null;
@@ -137,10 +214,13 @@ export function createInspector(doc, handlers, s, parts, draw) {
       const pin = s.pinIndex ? getPin(sch, s.pinIndex) : null;
       $('pin-form').hidden = !s.pinIndex;
       $('pin-heading').textContent = s.pinIndex ? `Pin ${s.pinIndex}` : '';
+      const pinKey = s.pinIndex ? `${sch.id}:${s.pinIndex}` : null;
+      if (pinKey !== readingPin) { readingPin = pinKey; resetReadingField(); }
       if (s.pinIndex) {
         setValue($('pin-role'), pin?.role ?? '');
         setValue($('pin-label'), pin?.label ?? '');
         setValue($('pin-note'), pin?.note ?? '');
+        grow($('pin-note'));
         const guess = pin?.guess?.role && pin.guess.role !== pin.role ? pin.guess : null;
         $('pin-guess').hidden = !guess;
         if (guess) {

@@ -4,6 +4,8 @@
 import { ClientError } from './client.js';
 import { newMarkerEvent } from './core/schema.js';
 import { PANELS } from './core/layout.js';
+import { describe } from './core/timeline.js';
+import { createHistory, entryFor, stillThere } from './core/undo.js';
 import { REFUSED } from './core/tutorial/policy.js';
 import { forgetToken, resolveSession, storeToken } from './session.js';
 import { TUTORIAL_SLUG, createTutorialControl } from './tutorialcontrol.js';
@@ -28,6 +30,11 @@ export function createController({ env, view, api, makeClient, baseUrl }) {
   const figures = new Map();      // wiki figure file -> Promise of an object URL, kept for the session
   const urls = env.urls ?? globalThis.URL;
   const openedWindows = new WeakSet();   // panel windows this one opened; only they may ask for a code
+  const history = createHistory();       // this window's changes to the board on screen
+  let steps = Promise.resolve();         // undo and redo presses, run one after another
+  const inFlight = new Set();            // this window's writes that are not in the history yet
+  let snapshotsSeen = 0;                 // a later snapshot is a resync, after which the history no longer fits
+  let playbookList = [];                 // for the names in the undo labels
 
   // Arguments every call to the service carries: the address and token, and for a board the slug on screen.
   const withToken = (extra = {}) => ({ baseUrl, token, ...extra });
@@ -37,7 +44,9 @@ export function createController({ env, view, api, makeClient, baseUrl }) {
   const remembered = () => { try { return env.storage.getItem(BOARD_KEY); } catch { return null; } };
 
   function stopBoard() {
+    view.flushNotes?.();          // unsaved notes go to the board they belong to, before it is closed
     boardGeneration += 1;
+    clearHistory();
     serialSession = null;
     unsubscribe?.();
     client?.close();
@@ -72,6 +81,8 @@ export function createController({ env, view, api, makeClient, baseUrl }) {
       readCapture: (path) => api.fetchFile(onBoard({ path })),
     },
   });
+  // A write that does not go through the socket still counts for the save chip.
+  const tracked = (promise) => (client ? client.track(promise) : promise);
   const refuse = () => Promise.reject(new Error(REFUSED));
 
   /** The tutorial ended: the board that was open comes back, else the one a fresh start would pick, else the empty page. */
@@ -101,14 +112,85 @@ export function createController({ env, view, api, makeClient, baseUrl }) {
     }
   }
 
-  /** Send one edit. Resolves true when stored; shows the reason and redraws from service state otherwise. */
-  async function send(event) {
-    if (!client) return false;
+  /** Send one edit. Resolves with its sequence number when stored; shows the reason and redraws from service state otherwise. */
+  async function write(event) {
+    if (!client) return null;
     const mine = client;
-    if (!tutorial.permit(event)) { view.render(mine.state); return false; }
-    const stored = await forBoard(async () => { await mine.apply(event); return true; }, 'Could not save that change.', false);
-    if (!stored && client === mine) view.render(mine.state);
-    return stored;
+    if (!tutorial.permit(event)) { view.render(mine.state); return null; }
+    const seq = await forBoard(async () => (await mine.apply(event)).seq, 'Could not save that change.', null);
+    if (seq == null && client === mine) view.render(mine.state);
+    return seq;
+  }
+
+  /** Send one edit the person made, so it can be undone. Resolves true when stored. */
+  async function send(event) {
+    return Boolean(await recorded(async () => {
+      const seq = await write(event);
+      return seq == null ? null : { seq, event };
+    }));
+  }
+
+  /**
+   * Run a write of this window and put it in the history. `run` resolves with {seq, event} once stored,
+   * or null. An undo pressed meanwhile waits for it, so it never skips over a change still on its way.
+   */
+  function recorded(run) {
+    const mine = client;
+    const job = (async () => {
+      const stored = await run();
+      if (stored) await recordChange(mine, stored.seq, stored.event);
+      return stored;
+    })();
+    inFlight.add(job);
+    job.then(() => inFlight.delete(job), () => inFlight.delete(job));
+    return job;
+  }
+
+  const clearHistory = () => history.clear();
+
+  /** What the undo items call a change: its timeline line, or nothing for a change the timeline leaves out. */
+  const labelFor = (event, project) => describe(event, project, playbookList)?.title ?? null;
+
+  /** A route's answer {event} as what `recorded` takes. */
+  const storedBy = (answer) => (answer?.event ? { seq: answer.event.seq, event: answer.event } : null);
+
+  /** Record a stored change of this window once the client has the board from before it. */
+  async function recordChange(mine, seq, event) {
+    if (tutorial.active() || !Number.isInteger(seq)) return;
+    const seen = await mine.around?.(seq);
+    if (!seen || mine !== client) return;
+    history.changed(entryFor(event, seen.before, seen.after, labelFor(event, seen.before)));
+  }
+
+  /** Undo or redo, after the presses before it and after this window's writes still on their way. */
+  function step(side) {
+    const run = steps.then(() => Promise.allSettled([...inFlight])).then(() => stepNow(side));
+    steps = run.catch(() => {});
+    return run;
+  }
+
+  /**
+   * Undo or redo the newest entry. It is dropped when the board no longer has what the change left
+   * (another window or the CLI changed it) or when the service refuses it. Without a connection it stays.
+   */
+  async function stepNow(side) {
+    if (!client) return;
+    if (!tutorial.permitAction('undo')) return;
+    const entry = history.peek(side);
+    if (!entry) return;
+    const mine = client;
+    if (mine.state.status !== 'live' || mine.state.storage?.writable === false) {
+      view.showError(`The app is not connected to the service, so nothing was ${side === 'undo' ? 'undone' : 'redone'}.`);
+      return;
+    }
+    history.take(side);
+    if (!stillThere(entry, mine.state.project)) {
+      view.showError(`Could not ${side} ${entry.label ? `"${entry.label}"` : 'the last change'}. It was changed after that.`);
+      return;
+    }
+    const seq = await write(entry.back);
+    const seen = seq == null ? null : await mine.around?.(seq);
+    if (seen && mine === client) history.reversed(side, entryFor(entry.back, seen.before, seen.after, entry.label));
   }
 
   function signedOut(message) {
@@ -166,6 +248,7 @@ export function createController({ env, view, api, makeClient, baseUrl }) {
   async function loadPlaybooks() {
     try {
       const { playbooks, problems } = await api.listPlaybooks(withToken());
+      playbookList = playbooks;
       view.setPlaybooks(playbooks, problems);
     } catch (error) {
       view.setPlaybooks([], [{ file: 'service', message: `Could not load playbooks: ${error.message}` }]);
@@ -193,7 +276,12 @@ export function createController({ env, view, api, makeClient, baseUrl }) {
       view.serialMessage(message);
     },
       onSettings: applySettings });
+    snapshotsSeen = 0;
     unsubscribe = client.subscribe((state) => {
+      if ((state.snapshots ?? 0) > snapshotsSeen) {
+        if (snapshotsSeen > 0) clearHistory();
+        snapshotsSeen = state.snapshots;
+      }
       view.render(state);
       if (practice) tutorial.stateChanged(state);
       if (state.status === 'rejected' && state.error?.code === 4401) {
@@ -256,30 +344,43 @@ export function createController({ env, view, api, makeClient, baseUrl }) {
       }
     },
 
-    /** Save changes to name, device and notes. Only fields that actually changed are sent. */
-    async saveDetails({ name, device, notes }) {
+    /** Save changes to name, device and notes. A field that is not given is left alone; only changed ones are sent. Resolves to false when the change was not saved. */
+    async saveDetails(fields) {
       const project = client?.state.project;
-      if (!project) return;
-      const wanted = { name: String(name ?? '').trim(), device: String(device ?? '').trim(), notes: String(notes ?? '') };
-      if (!wanted.name) { view.showError('A board needs a name.'); view.render(client.state); return; }
+      if (!project) return false;
+      const wanted = {};
+      if ('name' in fields) wanted.name = String(fields.name ?? '').trim();
+      if ('device' in fields) wanted.device = String(fields.device ?? '').trim();
+      if ('notes' in fields) wanted.notes = String(fields.notes ?? '');
+      if ('name' in wanted && !wanted.name) { view.showError('A board needs a name.'); view.render(client.state); return false; }
       const patch = {};
-      for (const key of ['name', 'device', 'notes']) {
+      for (const key of Object.keys(wanted)) {
         if (wanted[key] !== (project.meta[key] ?? '')) patch[key] = wanted[key];
       }
-      if (!Object.keys(patch).length) return;
-      if (!tutorial.permit({ type: 'project/metaUpdated', patch })) { view.render(client.state); return; }
+      if (!Object.keys(patch).length) return true;
+      if (!tutorial.permit({ type: 'project/metaUpdated', patch })) { view.render(client.state); return false; }
       const mine = client;
       const started = boardGeneration;
       try {
-        await mine.apply({ type: 'project/metaUpdated', patch });
+        const event = { type: 'project/metaUpdated', patch };
+        await recorded(async () => ({ seq: (await mine.apply(event)).seq, event }));
+        return true;
       } catch (error) {
-        if (started !== boardGeneration) return;
+        if (started !== boardGeneration) return false;
         view.showError(error instanceof ClientError ? error.message : 'Could not save that change.');
         view.render(mine.state);   // put the fields back to what the service has
+        return false;
       }
     },
 
     send,
+
+    /** Ctrl+Z and the Undo item: the newest change this window made to the board on screen. */
+    undo: () => step('undo'),
+    /** Ctrl+Shift+Z, Ctrl+Y and the Redo item. */
+    redo: () => step('redo'),
+    /** The labels of the next undo and redo, or null. */
+    historyLabels: () => history.labels(),
 
     listSerialPorts: () => api.listSerialPorts(withToken()),
     vdevStatus: () => api.vdevStatus(withToken()),
@@ -320,7 +421,7 @@ export function createController({ env, view, api, makeClient, baseUrl }) {
       return { url, token };
     },
 
-    importLogic: (file, name, samplerate) => !tutorial.permitAction('logic-import') ? null : forBoard(() => api.importLogic(onBoard({ file, name, samplerate })), 'Could not import that capture.'),
+    importLogic: (file, name, samplerate) => !tutorial.permitAction('logic-import') ? null : forBoard(() => tracked(api.importLogic(onBoard({ file, name, samplerate }))), 'Could not import that capture.'),
     logicEdges: (id, start, end, bins) => api.logicEdges(onBoard({ id, start, end, bins })),
     logicDecode: (id, channel, baud) => !tutorial.permitAction('logic-decode') ? null : forBoard(() => api.logicDecode(onBoard({ id, channel, baud })), 'Could not decode.'),
     logicCompare: (id, channel, other) => !tutorial.permitAction('logic-compare') ? null : forBoard(() => api.logicCompare(onBoard({ id, channel, other })), 'Could not compare.'),
@@ -469,15 +570,39 @@ export function createController({ env, view, api, makeClient, baseUrl }) {
     },
 
     /** Upload a photo; resolves with the new asset id, or null after showing why it failed. */
-    async uploadPhoto(file, side) {
+    async uploadPhoto(file) {
       if (!currentSlug || client?.state.storage?.writable === false || !tutorial.permitAction('upload')) return null;
-      const label = String(file?.name ?? '').replace(/\.[^.]*$/, '').slice(0, 40);
-      const uploaded = await forBoard(() => api.uploadPhoto(onBoard({ file, side, label: label || side })), 'Could not add that photo.');
+      const uploaded = await recorded(async () => storedBy(await forBoard(() => tracked(api.uploadPhoto(onBoard({ file }))), 'Could not add that photo.')));
       return uploaded?.event.asset.id ?? null;
+    },
+
+    /** Turn a photo by a quarter (1 right, -1 left); resolves true once the service has recorded it. */
+    async rotatePhoto(id, turns) {
+      if (!currentSlug || client?.state.storage?.writable === false || !tutorial.permitAction('photo-rotate')) return false;
+      const turned = await recorded(async () => storedBy(await forBoard(() => tracked(api.rotatePhoto(onBoard({ id, turns }))), 'Could not rotate the photo.')));
+      return Boolean(turned);
     },
 
     /** Export the board on screen; resolves with what the service wrote. Errors are thrown to the caller. */
     exportBoard: (formats, redact) => (tutorial.permitAction('export') ? api.exportBoard(onBoard({ formats, redact })) : refuse()),
+
+    /** The board's folder on disk, for the status menu. Resolves null when it cannot be read. */
+    async boardFolder() {
+      const board = await forBoard(() => api.getBoard(onBoard()), 'Could not read the board folder.', null);
+      return board?.directory ?? null;
+    },
+
+    /** Open the board's folder in the file manager; the reason is shown if that fails. */
+    async revealBoard() {
+      if (!currentSlug || !tutorial.permitAction('reveal')) return;
+      await forBoard(() => api.revealBoard(onBoard()), 'Could not open the board folder.');
+    },
+
+    /** Open the folder an export wrote. */
+    async revealExport(folder) {
+      if (!tutorial.permitAction('reveal')) return;
+      await forBoard(() => api.revealExport(withToken({ folder })), 'Could not open the export folder.');
+    },
 
     /** New box marker with its own header. Resolves with the marker id, or null. */
     async addMarker(assetId, rect) {

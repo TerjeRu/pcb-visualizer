@@ -18,7 +18,7 @@ function setup() {
 }
 
 const project = (meta = {}) => ({ meta: { name: 'Router', device: 'AX', notes: '', ...meta }, assets: [{}], markers: [], schematics: [], components: [] });
-const live = (extra = {}) => ({ status: 'live', project: project(), feed: [], error: null, ...extra });
+const live = (extra = {}) => ({ status: 'live', project: project(), error: null, ...extra });
 
 test('untrusted text is shown as text, never parsed as markup', () => {
   const { doc, view } = setup();
@@ -27,23 +27,11 @@ test('untrusted text is shown as text, never parsed as markup', () => {
   view.setBoards([evil], evil);
   view.render(live({
     project: project({ name: evil, notes: evil }),
-    feed: [{ seq: 1, ts: '2026-01-01T10:00:00Z', actor: evil, type: 'project/metaUpdated', patch: { [evil]: 1 } }],
   }));
   assert.equal(doc.querySelectorAll('img:not(#photo)').length, 0);   // #photo is the board photo element itself
   assert.equal(doc.body.querySelectorAll('script').length, 0);
   assert.equal(doc.getElementById('field-name').value, evil);
-  assert.ok(doc.querySelector('#feed .actor').textContent.includes('<img'));
   assert.equal(doc.querySelector('#board-select option').textContent, evil);
-});
-
-test('counts and newest-first feed are drawn from state', () => {
-  const { doc, view } = setup();
-  view.render(live({ feed: [
-    { seq: 1, ts: '2026-01-01T10:00:00Z', actor: 'a', type: 'marker/added', marker: { label: 'TP1' } },
-    { seq: 2, ts: '2026-01-01T10:00:01Z', actor: 'b', type: 'marker/removed', id: 'm1' },
-  ] }));
-  assert.deepEqual([...doc.querySelectorAll('#feed li .seq')].map((n) => n.textContent), ['#2', '#1']);
-  assert.ok([...doc.querySelectorAll('#counts li')].some((n) => n.textContent === '1 photo'));
 });
 
 test('a focused field is not overwritten by incoming state, but others are', () => {
@@ -63,10 +51,10 @@ test('a field left unchanged catches up with changes that arrived while it was f
   const { doc, view, calls } = setup();
   view.showBoardPanel();
   view.render(live());
-  const notes = doc.getElementById('field-notes');
+  const notes = doc.getElementById('field-device');
   notes.focus();
-  view.render(live({ project: project({ notes: 'from the CLI' }) }));
-  assert.equal(notes.value, '');
+  view.render(live({ project: project({ device: 'from the CLI' }) }));
+  assert.equal(notes.value, 'AX');
   notes.blur();
   assert.equal(notes.value, 'from the CLI');
   assert.equal(calls.length, 0);
@@ -76,10 +64,10 @@ test('a field edited while focused keeps the typed text on leaving', () => {
   const { doc, view } = setup();
   view.showBoardPanel();
   view.render(live());
-  const notes = doc.getElementById('field-notes');
+  const notes = doc.getElementById('field-device');
   notes.focus();
   notes.value = 'mine';
-  view.render(live({ project: project({ notes: 'from the CLI' }) }));
+  view.render(live({ project: project({ device: 'from the CLI' }) }));
   notes.blur();
   assert.equal(notes.value, 'mine');
 });
@@ -92,13 +80,70 @@ test('fields are editable only while live', () => {
   assert.equal(doc.getElementById('field-name').disabled, false);
 });
 
-test('editing a field reports all three values once on change', () => {
+test('editing a field reports the name and the device once on change, and not the notes', () => {
   const { dom, doc, view, calls } = setup();
   view.render(live());
-  const notes = doc.getElementById('field-notes');
-  notes.value = 'swapped UART pins';
-  notes.dispatchEvent(new dom.window.Event('change'));
-  assert.deepEqual(calls, [['onSaveDetails', { name: 'Router', device: 'AX', notes: 'swapped UART pins' }]]);
+  const device = doc.getElementById('field-device');
+  device.value = 'AX3000';
+  device.dispatchEvent(new dom.window.Event('change'));
+  assert.deepEqual(calls, [['onSaveDetails', { name: 'Router', device: 'AX3000' }]]);
+  assert.equal(doc.getElementById('field-notes'), null, 'the notes have their own panel');
+});
+
+test('the Board card shows the first line of the notes, or says there are none', () => {
+  const { doc, view } = setup();
+  view.render(live());
+  assert.equal(doc.getElementById('open-notes').textContent, 'No notes yet');
+  view.render(live({ project: project({ notes: '\n- 2026-11-05 18:16 UART on J2\nsecond line' }) }));
+  assert.equal(doc.getElementById('open-notes').textContent, '- 2026-11-05 18:16 UART on J2');
+  view.render(live({ project: project({ notes: `${'x'.repeat(200)}\nnext` }) }));
+  assert.equal(doc.getElementById('open-notes').textContent, `${'x'.repeat(79)}…`);
+  assert.equal(doc.getElementById('notes-text').value, `${'x'.repeat(200)}\nnext`, 'the panel holds the whole text');
+});
+
+test('the Board card button brings the Notes panel forward, also from away, and focuses the text', async () => {
+  const { doc, view, pause } = await dockedSetup();
+  doc.getElementById('board-panel').hidden = false;   // jsdom focuses only what is shown
+  view.render(live({ project: project({ notes: 'text' }) }));
+  doc.getElementById('open-notes').click();
+  await pause();
+  assert.equal(doc.querySelector('#region-center [role="tab"][aria-selected="true"]').dataset.panel, 'notes');
+  assert.equal(doc.activeElement.id, 'notes-text');
+  doc.getElementById('panels-open').click();
+  [...doc.querySelectorAll('.panels-row[data-panel="notes"] [role="menuitem"]')].find((b) => b.textContent === 'Put away').click();
+  assert.equal(doc.querySelector('#region-center [data-panel="notes"]'), null);
+  doc.getElementById('open-notes').click();
+  await pause();
+  assert.equal(doc.querySelector('#region-center [role="tab"][aria-selected="true"]').dataset.panel, 'notes', 'it comes back from away');
+});
+
+test('unsaved notes are sent when the board is left', () => {
+  const { dom, doc, view, calls } = setup();
+  view.render(live());
+  const text = doc.getElementById('notes-text');
+  text.value = 'half done';
+  text.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  assert.equal(calls.length, 0);
+  view.flushNotes();
+  assert.deepEqual(calls, [['onSaveDetails', { notes: 'half done' }]]);
+  view.showBoardPanel();
+  assert.equal(text.value, '', 'the next board starts empty');
+});
+
+test('the header and pin notes are text boxes that grow with their text', () => {
+  const { dom, doc } = setup();
+  const header = doc.getElementById('header-notes');
+  const pin = doc.getElementById('pin-note');
+  assert.equal(header.tagName, 'TEXTAREA');
+  assert.equal(pin.tagName, 'TEXTAREA');
+  assert.deepEqual([header.rows, header.dataset.maxRows, pin.rows, pin.dataset.maxRows], [3, '12', 2, '8']);
+  assert.equal(pin.getAttribute('maxlength'), '400');
+  for (const [box, rows] of [[header, '12'], [pin, '8']]) {
+    Object.defineProperty(box, 'scrollHeight', { value: 96, configurable: true });
+    box.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    assert.equal(box.style.height, '96px');
+    assert.equal(box.style.getPropertyValue('--rows'), rows, 'CSS caps the height at this many rows');
+  }
 });
 
 test('forms report intent and clear secrets/inputs; no page navigation', () => {
@@ -286,7 +331,7 @@ test('every panel has one Guided-only explainer line', () => {
 
 test('empty states carry a Guided sentence and a short form for Expert', () => {
   const { doc } = setup();
-  for (const id of ['empty-panel', 'changes-empty', 'assistant-empty', 'inspector-empty', 'viewer-empty', 'logic-empty']) {
+  for (const id of ['empty-panel', 'assistant-empty', 'inspector-empty', 'viewer-empty', 'logic-empty']) {
     const node = doc.getElementById(id);
     const guide = node.querySelector('.guide'), terse = node.querySelector('.terse');
     assert.ok(guide && terse, `${id} has both forms`);
@@ -412,6 +457,21 @@ test('a target in a tab that is not showing puts the highlight on that tab', asy
   assert.deepEqual(ringed(doc).map((n) => n.id), ['serial-connect']);
 });
 
+test('a control inside a closed dialog puts the highlight on the button that opens it', async () => {
+  const t = await dockedSetup();
+  t.doc.getElementById('board-panel').hidden = false;
+  await t.view.tutorialEnter(['board']);
+  const { doc, view } = t;
+  view.tutorialDraw(coachStep({ target: 'export-run' }));
+  assert.deepEqual(ringed(doc).map((n) => n.id), ['export-open']);
+  doc.getElementById('export-open').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));        // the observer redraws the ring
+  assert.deepEqual(ringed(doc).map((n) => n.id), ['export-run'], 'the dialog is open now');
+  doc.getElementById('export-close').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(ringed(doc).map((n) => n.id), ['export-open']);
+});
+
 test('the highlight is put back when the dock rebuilds its tabs', async () => {
   const { doc, view } = await coachSetup();
   view.tutorialDraw(coachStep({ target: 'wiki-index' }));
@@ -491,4 +551,167 @@ test('with the assistant off the example fold-out is not shown', async () => {
   assert.equal(doc.getElementById('tutorial-example').hasAttribute('data-ai'), true);
   assert.match(readFileSync(new URL('../css/app.css', import.meta.url), 'utf8'), /\[data-assistant="off"\] \[data-ai\]\s*\{\s*display:\s*none\s*!important/);
   assert.ok(view);
+});
+
+const chip = (doc) => doc.getElementById('status');
+
+test('the chip says Saved, then Saving only after 400 ms, then Not saved with the reason', () => {
+  const { doc, view, timers } = setup();
+  view.showBoardPanel();
+  view.render(live({ save: { pending: 0, at: null, error: null } }));
+  assert.equal(chip(doc).textContent, 'Saved');
+  assert.equal(chip(doc).dataset.state, 'saved');
+  view.render(live({ save: { pending: 1, at: null, error: null } }));
+  assert.equal(chip(doc).textContent, 'Saved', 'a short write does not flicker');
+  timers.fn();
+  assert.equal(chip(doc).textContent, 'Saving');
+  assert.equal(chip(doc).dataset.state, 'saving');
+  view.render(live({ save: { pending: 0, at: new Date(2026, 10, 5, 18, 16).getTime(), error: null } }));
+  assert.equal(chip(doc).textContent, 'Saved 18:16');
+  view.render(live({ save: { pending: 0, at: null, error: 'The disk is full.' } }));
+  assert.equal(chip(doc).textContent, 'Not saved');
+  assert.equal(chip(doc).title, 'The disk is full.');
+  view.render(live({ status: 'reconnecting', save: { pending: 0, at: null, error: 'x' } }));
+  assert.equal(chip(doc).textContent, 'Reconnecting');
+});
+
+function menuSetup({ git = 'off', folder = '/home/t/hw/boards/nimbus', commit = '2026-11-05T18:02:00+01:00', labels = { undo: null, redo: null } } = {}) {
+  const t = setup();
+  const copied = [];
+  const revealed = [];
+  const stepped = [];
+  const win = t.doc.defaultView;
+  Object.defineProperty(win.navigator, 'clipboard', { value: { writeText: async (text) => { copied.push(text); } }, configurable: true });
+  const view = createView(t.doc, {
+    onSaveDetails() {}, loadPhoto: async () => 'blob:test',
+    boardFolder: async () => folder, revealBoard: () => revealed.push('board'),
+    gitStatus: async () => ({ detail: { last_commit: commit } }),
+    historyLabels: () => labels, undo: () => stepped.push('undo'), redo: () => stepped.push('redo'),
+  }, { set: () => 1, clear() {} });
+  t.doc.documentElement.dataset.git = git;
+  return { ...t, view, copied, revealed, stepped };
+}
+const flush = () => new Promise((r) => setTimeout(r, 0));
+const key = (doc, target, name) => target.dispatchEvent(new doc.defaultView.KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }));
+
+test('the chip is plain text without a board and a menu button with one', () => {
+  const { doc, view } = menuSetup();
+  view.showNoBoards();
+  assert.equal(doc.getElementById('status-button').disabled, true);
+  view.showBoardPanel();
+  view.render(live());
+  assert.equal(doc.getElementById('status-button').disabled, false);
+  assert.equal(doc.getElementById('status-button').getAttribute('aria-haspopup'), 'menu');
+});
+
+test('the status menu shows the folder, copies it, opens it, and closes with Esc to the chip', async () => {
+  const { doc, view, copied, revealed } = menuSetup();
+  view.showBoardPanel();
+  view.render(live());
+  const button = doc.getElementById('status-button');
+  button.click();
+  await flush();
+  const menu = doc.querySelector('.status-menu');
+  assert.equal(button.getAttribute('aria-expanded'), 'true');
+  const items = [...menu.querySelectorAll('[role="menuitem"]')];
+  assert.deepEqual(items.map((i) => i.firstChild.textContent), ['Nothing to undo', 'Nothing to redo', 'Copy folder path', 'Open board folder']);
+  assert.equal(items[2].querySelector('.menu-sub').textContent, '/home/t/hw/boards/nimbus');
+  assert.equal(doc.activeElement, items[3]);
+  key(doc, items[3], 'ArrowDown');
+  assert.equal(doc.activeElement, items[0]);
+  key(doc, items[0], 'End');
+  assert.equal(doc.activeElement, items[3]);
+  items[2].click();
+  assert.deepEqual(copied, ['/home/t/hw/boards/nimbus']);
+  assert.equal(doc.querySelector('.status-menu'), null);
+  button.click();
+  await flush();
+  doc.querySelectorAll('.status-menu [role="menuitem"]')[3].click();
+  assert.deepEqual(revealed, ['board']);
+  button.click();
+  await flush();
+  key(doc, doc.activeElement, 'Escape');
+  assert.equal(doc.querySelector('.status-menu'), null);
+  assert.equal(doc.activeElement, button);
+});
+
+test('the Last commit line shows only with git on', async () => {
+  for (const [git, expected] of [['off', 0], ['on', 1]]) {
+    const { doc, view } = menuSetup({ git });
+    view.showBoardPanel();
+    view.render(live());
+    doc.getElementById('status-button').click();
+    await flush();
+    await flush();
+    const lines = [...doc.querySelectorAll('.status-menu .menu-note')];
+    assert.equal(lines.length, expected, git);
+    if (expected) assert.match(lines[0].textContent, /^Last commit: /);
+  }
+});
+
+test('Open board folder in the Board card asks the controller', () => {
+  const { doc, view, revealed } = menuSetup();
+  view.showBoardPanel();
+  doc.getElementById('reveal-board').click();
+  assert.deepEqual(revealed, ['board']);
+});
+
+test('Undo and Redo in the status menu are named after the change and do nothing when there is none', async () => {
+  const { doc, view, stepped } = menuSetup({ labels: { undo: 'Header marked: J2', redo: '' } });
+  view.showBoardPanel();
+  view.render(live());
+  doc.getElementById('status-button').click();
+  await flush();
+  const [undo, redo] = doc.querySelectorAll('.status-menu [role="menuitem"]');
+  assert.equal(undo.firstChild.textContent, 'Undo: Header marked: J2');
+  assert.equal(undo.querySelector('.menu-sub').textContent, 'Ctrl+Z');
+  assert.equal(undo.getAttribute('aria-keyshortcuts'), 'Control+Z');
+  assert.equal(redo.firstChild.textContent, 'Redo last change');
+  assert.equal(redo.getAttribute('aria-disabled'), null);
+  undo.click();
+  assert.deepEqual(stepped, ['undo']);
+  assert.equal(doc.querySelector('.status-menu'), null, 'the menu closes');
+
+  const empty = menuSetup();
+  empty.view.showBoardPanel();
+  empty.view.render(live());
+  empty.doc.getElementById('status-button').click();
+  await flush();
+  const nothing = empty.doc.querySelector('.status-menu [role="menuitem"]');
+  assert.equal(nothing.getAttribute('aria-disabled'), 'true');
+  nothing.click();
+  assert.deepEqual(empty.stepped, []);
+});
+
+const press = (doc, target, key, mods = {}) => {
+  const event = new doc.defaultView.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ctrlKey: true, ...mods });
+  target.dispatchEvent(event);
+  return event.defaultPrevented;
+};
+
+test('Ctrl+Z undoes and Ctrl+Shift+Z and Ctrl+Y redo, outside fields that have their own undo', () => {
+  const { doc, stepped } = menuSetup();
+  assert.equal(press(doc, doc.body, 'z'), true);
+  press(doc, doc.body, 'Z', { shiftKey: true });
+  press(doc, doc.body, 'y');
+  assert.deepEqual(stepped, ['undo', 'redo', 'redo']);
+  for (const id of ['notes-text', 'field-name', 'pin-label']) {
+    const field = doc.getElementById(id);
+    assert.ok(field, id);
+    assert.equal(press(doc, field, 'z'), false, id);
+  }
+  const editable = doc.createElement('div');
+  editable.setAttribute('contenteditable', 'true');
+  doc.body.append(editable);
+  press(doc, editable, 'z');
+  press(doc, doc.body, 'z', { altKey: true });
+  press(doc, doc.body, 'z', { ctrlKey: false });
+  assert.deepEqual(stepped, ['undo', 'redo', 'redo']);
+  // a checkbox and a select have no text undo, so the board change is undone there
+  const box = doc.createElement('input');
+  box.type = 'checkbox';
+  doc.body.append(box);
+  assert.equal(press(doc, box, 'z'), true);
+  assert.equal(press(doc, doc.getElementById('pin-role'), 'z'), true);
+  assert.deepEqual(stepped, ['undo', 'redo', 'redo', 'undo', 'undo']);
 });

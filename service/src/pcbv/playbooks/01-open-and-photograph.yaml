@@ -52,15 +52,12 @@ steps:
       1. Put the board on a plain, matte surface in even light. Daylight from a window works. Do not use the flash.
       2. Hold the camera straight above the board so the board fills the frame. Take a few photos and keep the sharpest.
       3. Take the same photos of the back.
-      4. Pick **front** or **back** in the box next to **Add photo**. Then add each photo.
-      5. Optional: take close-ups of the main chips and add them as **detail** photos. They help you read the markings.
+      4. Add each photo with **Add photo**. Name them, for example Front and Back, with **Rename** in the photo's menu.
+      5. Optional: add close-ups of the main chips. They help you read the markings.
     checks:
       - kind: photos
-        side: front
-        text: A front photo is added.
-      - kind: photos
-        side: back
-        text: A back photo is added.
+        min: 2
+        text: Two photos are added.
     done_when: Both sides are in the app and you can read chip markings when you zoom in.
     wiki: [photographing-boards]
 

@@ -15,8 +15,14 @@ export function createTerminalView(doc, handlers) {
   let socket = null;
   let refused = false;
   let observer = null;
+  let used = false;       // a session has run since the board opened, so its text stays at full height
 
   function status(text) { $('terminal-status').textContent = text; }
+
+  /** Before the first session the black screen is a short band. It grows when a session starts and stays tall afterwards. */
+  function drawFold() {
+    $('tab-terminal').classList.toggle('folded', !socket && !used);
+  }
 
   function setRunning(running) {
     $('terminal-start').hidden = running;
@@ -56,9 +62,17 @@ export function createTerminalView(doc, handlers) {
   }
 
   function start() {
-    if (socket || !ensureTerminal()) return;
+    if (socket) return;
+    const wasUsed = used;
+    used = true;
+    drawFold();                          // grow first, so the terminal is made and fitted at full size
     const target = handlers.terminalTarget?.();
-    if (!target) { status('Choose a board first.'); return; }
+    if (!ensureTerminal() || !target) {
+      used = wasUsed;
+      drawFold();
+      if (!target && term) status('Choose a board first.');
+      return;
+    }
     try { fit?.fit(); } catch { /* not laid out yet */ }
     term.reset();
     refused = false;
@@ -96,6 +110,7 @@ export function createTerminalView(doc, handlers) {
   $('terminal-start').addEventListener('click', start);
   $('terminal-stop').addEventListener('click', stop);
   setRunning(false);
+  drawFold();
 
   return {
     /** Called when the panel comes into view. A session starts only from the Start button, since each one is recorded. */
@@ -108,6 +123,8 @@ export function createTerminalView(doc, handlers) {
       socket = null;
       old?.close(1000);
       setRunning(false);
+      used = false;
+      drawFold();
       term?.reset();
       status('No session. Start one to get a shell in the board folder.');
     },

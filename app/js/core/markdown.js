@@ -4,6 +4,8 @@
 // Supported: # headings, paragraphs, "- " and "1. " lists, ``` code blocks, | pipe | tables |,
 // **bold**, *italic*, `code`, [links](target) and figures: ![caption](name.svg) or ![caption](name.png)
 // alone on a line. options.loadFigure(name) resolves to an image URL (without it, only the caption shows).
+// A list item that starts with [ ] or [x] is a task: a checkbox followed by the text. The checkbox is
+// disabled unless options.onToggleTask(index) is set; index counts the tasks from the top of the text.
 // A link to a page name (uart, spi-flash) becomes a
 // wiki link handled by `onWikiLink`; an http(s) URL opens in a new tab; anything else (javascript:,
 // data:, relative paths) stays plain text. Anything unrecognised stays text.
@@ -104,6 +106,8 @@ export function renderMarkdown(doc, text, options = {}) {
   let paragraph = [];
   let listEl = null;
   let item = null;
+  let body = null;                   // where text of the open list item goes: the item, or its span for a task
+  let tasks = 0;
 
   const flushParagraph = () => {
     if (!paragraph.length) return;
@@ -112,7 +116,7 @@ export function renderMarkdown(doc, text, options = {}) {
     fragment.append(p);
     paragraph = [];
   };
-  const closeList = () => { listEl = null; item = null; };
+  const closeList = () => { listEl = null; item = null; body = null; };
   const closeAll = () => { flushParagraph(); closeList(); };
 
   for (let i = 0; i < lines.length; i++) {
@@ -175,22 +179,41 @@ export function renderMarkdown(doc, text, options = {}) {
     }
 
     const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
-    const numbered = /^\s*\d+[.)]\s+(.*)$/.exec(line);
+    const numbered = /^\s*(\d+)[.)]\s+(.*)$/.exec(line);
     if (bullet || numbered) {
       flushParagraph();
       const tag = numbered ? 'OL' : 'UL';
       if (!listEl || listEl.tagName !== tag) {
         listEl = doc.createElement(tag.toLowerCase());
+        if (numbered && Number(numbered[1]) !== 1) listEl.setAttribute('start', numbered[1]);
         fragment.append(listEl);
       }
       item = doc.createElement('li');
-      inline(doc, item, (numbered ?? bullet)[1], options);
+      body = item;
+      let text = numbered ? numbered[2] : bullet[1];
+      const task = /^\[([ xX])\](?:\s+(.*))?$/.exec(text);
+      if (task) {
+        text = task[2] ?? '';
+        const index = tasks++;
+        const box = doc.createElement('input');
+        box.type = 'checkbox';
+        box.checked = task[1] !== ' ';
+        box.disabled = !options.onToggleTask;
+        box.addEventListener('change', () => options.onToggleTask?.(index));
+        body = doc.createElement('span');
+        item.className = 'task';
+        item.append(box, ' ', body);
+      }
+      inline(doc, body, text, options);
+      if (task) item.firstChild.setAttribute('aria-label', body.textContent || 'Task');
       listEl.append(item);
     } else if (line.trim() === '') {
-      closeAll();
+      flushParagraph();                            // a blank line ends the item but not the list
+      item = null;
+      body = null;
     } else if (item && /^\s+/.test(raw)) {
-      item.append(doc.createTextNode(' '));        // an indented line continues the list item
-      inline(doc, item, line.trim(), options);
+      body.append(doc.createTextNode(' '));        // an indented line continues the list item
+      inline(doc, body, line.trim(), options);
     } else {
       closeList();
       paragraph.push(line.trim());

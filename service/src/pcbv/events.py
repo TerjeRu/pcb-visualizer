@@ -16,24 +16,26 @@ from typing import Any
 from .schema import ASSET_DIR, Project, ProjectShapeError, check_project_shape
 
 MAX_EVENT_BYTES = 1_000_000
+MAX_LABEL_CHARS = 80          # a photo label; app/js/photoview.js has the same number
+MAX_NOTES_CHARS = 100_000      # the Notes panel's limit; app/js/notesview.js has the same number
 
 # type -> (required payload keys, optional payload keys)
 CLIENT_EVENT_FIELDS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "board/batch": (("events",), ()),
-    "project/metaUpdated": (("patch",), ()),
-    "asset/added": (("asset",), ()),
-    "asset/updated": (("id", "patch"), ()),
+    "project/metaUpdated": (("patch",), ("unset",)),
+    "asset/added": (("asset",), ("at",)),
+    "asset/updated": (("id", "patch"), ("unset",)),
     "asset/removed": (("id",), ()),
-    "marker/added": (("marker",), ("schematic",)),
-    "marker/updated": (("id", "patch"), ()),
+    "marker/added": (("marker",), ("schematic", "at", "schematicAt")),
+    "marker/updated": (("id", "patch"), ("unset",)),
     "marker/removed": (("id",), ()),
-    "schematic/updated": (("id", "patch"), ()),
+    "schematic/updated": (("id", "patch"), ("unset",)),
     "pin/readingAdded": (("schematicId", "index", "reading"), ()),
     "pin/updated": (("schematicId", "index", "patch"), ()),
     "components/replaced": (("components",), ()),
-    "playbook/updated": (("playbookId", "patch"), ("stepId",)),
-    "annotation/added": (("annotation",), ()),
-    "annotation/updated": (("id", "patch"), ()),
+    "playbook/updated": (("playbookId", "patch"), ("stepId", "unset")),
+    "annotation/added": (("annotation",), ("at",)),
+    "annotation/updated": (("id", "patch"), ("unset",)),
     "annotation/removed": (("id",), ()),
 }
 # Written by the service for console, shell and logic captures; clients cannot forge them.
@@ -51,6 +53,8 @@ INTERNAL_EVENT_FIELDS.update(CAPTURE_EVENT_FIELDS)
 ALL_EVENT_FIELDS = {**CLIENT_EVENT_FIELDS, **INTERNAL_EVENT_FIELDS}
 
 PROTECTED_META_KEYS = {"id", "created"}
+MAX_UNSET_KEYS = 64          # an undo removes the keys a patch added; app/js/core/undo.js builds these
+MAX_POSITION = 1_000_000
 PLAYBOOK_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
 
@@ -97,6 +101,27 @@ def _check_patch(patch: dict, *, protected: set[str] = frozenset({"id"})) -> Non
         raise EventError(f"patch may not change {sorted(clash)}")
 
 
+def _check_unset(event: dict, *, protected: set[str] = frozenset({"id"})) -> None:
+    """`unset` names keys the reducer removes after the patch. A key cannot be set and removed at once."""
+    if "unset" not in event:
+        return
+    keys = event["unset"]
+    if (not isinstance(keys, list) or not 1 <= len(keys) <= MAX_UNSET_KEYS
+            or not all(isinstance(k, str) and 1 <= len(k) <= 64 for k in keys) or len(set(keys)) != len(keys)):
+        raise EventError(f"{event['type']}: unset must list 1 to {MAX_UNSET_KEYS} different key names")
+    clash = (protected | event["patch"].keys()) & set(keys)
+    if clash:
+        raise EventError(f"{event['type']}: unset may not name {sorted(clash)}")
+
+
+def _check_positions(event: dict) -> None:
+    for key in ("at", "schematicAt"):
+        if key in event and (not _is_int(event[key]) or not 0 <= event[key] <= MAX_POSITION):
+            raise EventError(f"{event['type']}: {key} must be a whole number from 0 to {MAX_POSITION}")
+    if "schematicAt" in event and event.get("schematic") is None:
+        raise EventError("marker/added: schematicAt needs a schematic")
+
+
 GUESS_CONFIDENCE = ("high", "medium", "low")
 
 
@@ -109,6 +134,12 @@ def _check_guess(guess: Any, kind: str) -> None:
     for key, limit in (("by", 120), ("evidence", 400), ("role", 16), ("at", 40)):
         if key in guess and (not isinstance(guess[key], str) or len(guess[key]) > limit):
             raise EventError(f"{kind}: guess.{key} must be text of at most {limit} characters")
+
+
+def _check_asset_rotation(fields: dict, kind: str) -> None:
+    """A photo's rotation is the sum of its quarter turns (see geometry.py)."""
+    if "rotation" in fields and (not _is_int(fields["rotation"]) or fields["rotation"] not in (0, 90, 180, 270)):
+        raise EventError(f"{kind}: a photo rotation must be 0, 90, 180 or 270")
 
 
 def _check_annotation_fields(fields: dict, kind: str) -> None:
@@ -252,18 +283,28 @@ def validate_event(raw: Any, *, internal: bool = False) -> dict:
     elif kind == "project/metaUpdated":
         patch = _need_dict(event, "patch")
         _check_patch(patch, protected=PROTECTED_META_KEYS)
+        _check_unset(event, protected=PROTECTED_META_KEYS)
+        notes = patch.get("notes")
+        if isinstance(notes, str) and len(notes) > MAX_NOTES_CHARS:
+            raise EventError(f"project/metaUpdated: notes longer than {MAX_NOTES_CHARS} characters")
     elif kind == "asset/added":
         asset = _need_dict(event, "asset")
         if not _is_str(asset.get("id")):
             raise EventError("asset/added: asset.id must be a non-empty string")
         validate_asset_path(asset.get("path"))
+        _check_asset_rotation(asset, kind)
     elif kind == "asset/updated":
         if not _is_str(event["id"]):
             raise EventError("asset/updated: id must be a non-empty string")
         patch = _need_dict(event, "patch")
         _check_patch(patch)
+        _check_unset(event)
         if "path" in patch:
             validate_asset_path(patch["path"])
+        label = patch.get("label")
+        if "label" in patch and (not isinstance(label, str) or len(label) > MAX_LABEL_CHARS):
+            raise EventError(f"asset/updated: label must be text of at most {MAX_LABEL_CHARS} characters")
+        _check_asset_rotation(patch, kind)
     elif kind in ("asset/removed", "marker/removed"):
         if not _is_str(event["id"]):
             raise EventError(f"{kind}: id must be a non-empty string")
@@ -282,6 +323,7 @@ def validate_event(raw: Any, *, internal: bool = False) -> dict:
         if not _is_str(event["id"]):
             raise EventError(f"{kind}: id must be a non-empty string")
         _check_patch(_need_dict(event, "patch"))
+        _check_unset(event)
     elif kind == "pin/readingAdded":
         if not _is_str(event["schematicId"]) or not _is_int(event["index"]) or not 1 <= event["index"] <= 1_000_000:
             raise EventError("reading requires a schematic and pin index from 1 to 1000000")
@@ -326,6 +368,7 @@ def validate_event(raw: Any, *, internal: bool = False) -> dict:
             raise EventError("annotation/updated: id must be a non-empty string")
         patch = _need_dict(event, "patch")
         _check_patch(patch)
+        _check_unset(event)
         _check_annotation_fields(patch, "annotation/updated")
     elif kind == "annotation/removed":
         if not _is_str(event["id"]):
@@ -338,11 +381,13 @@ def validate_event(raw: Any, *, internal: bool = False) -> dict:
         _need_dict(event, "patch")
         if "stepId" not in event and "steps" in event["patch"]:
             raise EventError("playbook/updated: change steps one at a time with stepId")
+        _check_unset(event, protected=frozenset() if "stepId" in event else frozenset({"steps"}))
     elif kind == "components/replaced":
         comps = event["components"]
         if not isinstance(comps, list) or not all(isinstance(c, dict) for c in comps):
             raise EventError("components/replaced: components must be a list of objects")
 
+    _check_positions(event)
     for key in ("asset", "marker", "schematic", "annotation", "patch", "capture"):
         fields = event.get(key)
         if isinstance(fields, dict):
@@ -374,6 +419,11 @@ def check_against_state(project: Project, event: dict) -> None:
     """Reject events that point at things that do not exist or that duplicate ids."""
     kind = event["type"]
     ids = lambda key: {item.get("id") for item in project[key]}  # noqa: E731
+
+    for key, items in (("at", {"asset/added": "assets", "marker/added": "markers", "annotation/added": "annotations"}.get(kind)),
+                       ("schematicAt", "schematics")):
+        if key in event and items and event[key] > len(project.get(items, [])):
+            raise EventConflict(f"{kind}: {key} {event[key]} is past the end of {items}")
 
     if kind == "asset/added" and event["asset"]["id"] in ids("assets"):
         raise EventConflict(f"asset {event['asset']['id']!r} already exists")

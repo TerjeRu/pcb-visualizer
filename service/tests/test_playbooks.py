@@ -24,6 +24,12 @@ def test_builtin_playbooks_are_valid_and_ordered():
     assert all(g["destructive"] is False for g in ground["gates"])
 
 
+def test_the_photo_step_asks_for_two_photos_of_any_kind():
+    playbooks, _ = load_all(None)
+    step = next(s for s in playbooks[0]["steps"] if s["id"] == "photos")
+    assert [(c["kind"], c.get("min"), c.get("side")) for c in step["checks"]] == [("photos", 2, None)]
+
+
 def test_logic_capture_playbook_listens_only_and_builds_on_the_console_playbook():
     playbooks, problems = load_all(None)
     assert problems == []

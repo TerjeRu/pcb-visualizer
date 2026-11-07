@@ -167,7 +167,7 @@ test('the tutorial layout shows the step panels and the Wiki only, and nothing i
   assert.ok(centre.contains($(doc, 'panel-wiki')));
   assert.equal($(doc, 'panel-photo').hidden, false);
   assert.equal($(doc, 'panel-wiki').hidden, true, 'a tab behind the photo');
-  for (const panel of ['playbook', 'console', 'logic', 'terminal', 'timeline', 'board', 'inspector', 'feed', 'assistant']) {
+  for (const panel of ['playbook', 'console', 'logic', 'terminal', 'timeline', 'board', 'inspector', 'assistant']) {
     assert.equal($(doc, `panel-${panel}`).closest('#panel-store') !== null, true, `${panel} is put away`);
   }
   await view.tutorialLayout(['photo', 'inspector']);

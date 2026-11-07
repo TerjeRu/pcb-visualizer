@@ -12,6 +12,7 @@ reducers), newest last:
 from __future__ import annotations
 
 import json
+import math
 import re
 from datetime import datetime
 import urllib.error
@@ -47,6 +48,10 @@ def parse_reading(text: str) -> dict:
     number = float(match.group(1).replace(",", "."))
     unit, factor, mode = _SCALE[(match.group(2) or "v").lower()]
     value = round(number * factor, 6)
+    if not math.isfinite(value):
+        raise EditError("the number is too large; write it like 3.29V, 330mV, 0.3ohm, 4.7k, OL or beep")
+    if mode == "ohm" and match.group(1).startswith("-"):
+        raise EditError("a resistance cannot be negative; write it like 0.3ohm or 4.7k")
     shown = f"{value:g} {unit}" if unit == "V" else _ohms(value)
     return {"mode": mode, "value": value, "unit": unit, "text": shown}
 

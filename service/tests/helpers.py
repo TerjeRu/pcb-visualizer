@@ -68,6 +68,23 @@ def script():
         {"type": "marker/updated", "id": "mk_1", "patch": {"x": 99, "label": "J1"}},
         {"type": "schematic/updated", "id": "sch_1", "patch": {"rows": 2, "cols": 2, "numbering": "u"}},
         {"type": "asset/updated", "id": "img_a", "patch": {"label": "front"}},
+        # unset and at, as undo writes them
+        {"type": "marker/updated", "id": "mk_1", "patch": {"x": 98}, "unset": ["color"]},
+        {"type": "schematic/updated", "id": "sch_1", "patch": {}, "unset": ["notes"]},
+        {"type": "asset/updated", "id": "img_b", "patch": {}, "unset": ["side"]},
+        {"type": "project/metaUpdated", "patch": {"name": "Nimbus N100"}, "unset": ["device"]},
+        {**add_asset(id="img_c", path="assets/c.jpg"), "at": 1},
+        {**add_marker("mk_4", "img_c", "sch_4"), "at": 0, "schematicAt": 1},
+        {"type": "marker/removed", "id": "mk_4"},
+        {"type": "asset/removed", "id": "img_c"},
+        {"type": "annotation/added", "annotation": {"id": "an_1", "assetId": "img_b", "x": 1, "y": 1, "lx": 9, "ly": 9, "text": "R1", "wiki": ""}},
+        {"type": "annotation/added", "annotation": {"id": "an_2", "assetId": "img_b", "x": 2, "y": 2, "lx": 8, "ly": 8, "text": "C1"}, "at": 0},
+        {"type": "annotation/updated", "id": "an_1", "patch": {"text": "R2"}, "unset": ["wiki"]},
+        {"type": "playbook/updated", "playbookId": "uart", "stepId": "find", "patch": {"done": True}},
+        {"type": "playbook/updated", "playbookId": "uart", "stepId": "wire", "patch": {"done": True}},
+        {"type": "playbook/updated", "playbookId": "uart", "stepId": "wire", "patch": {}, "unset": ["done"]},
+        {"type": "playbook/updated", "playbookId": "spi", "patch": {"answers": {"a": "yes"}}},
+        {"type": "playbook/updated", "playbookId": "spi", "patch": {}, "unset": ["answers"]},
         {"type": "components/replaced", "components": [comp, {**comp, "id": "cmp_2", "assetId": "img_b"}]},
         {"type": "marker/removed", "id": "mk_2"},                 # header still used by mk_1
         {"type": "marker/removed", "id": "mk_3"},                 # last user of sch_2: header goes too

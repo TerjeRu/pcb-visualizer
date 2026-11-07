@@ -103,8 +103,7 @@ test('guidance rules: Expert hides the help and shows the short form; empty note
   assert.match(css, /\[data-guidance="expert"\] \.guide \{ display: none !important; \}/);
   assert.match(css, /:root:not\(\[data-guidance="expert"\]\) \.terse \{ display: none !important; \}/);
   assert.match(css, /\.assistant-log:not\(:empty\) \+ #assistant-empty[^{]*\{ display: none; \}/);
-  assert.match(css, /\.feed:not\(:empty\) \+ #changes-empty[^{]*\{ display: none; \}/);
-  assert.match(css, /\.screen a\s*\{[^}]*--scr-/, 'links on the dark Changes screen are readable');
+  assert.match(css, /\.screen a\s*\{[^}]*--scr-/, 'links on the dark screens are readable');
 });
 
 test('everything marked data-ai is hidden while the assistant is off, whatever other rules say', () => {

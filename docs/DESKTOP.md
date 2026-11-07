@@ -2,7 +2,7 @@
 
 ## Panels and workspaces (any browser)
 
-The board screen is made of panels: Board, Header, Changes, Photo, Playbook, Wiki, Console,
+The board screen is made of panels: Board, Header, Photo, Notes, Playbook, Wiki, Console,
 Timeline, Logic, Terminal and Agent. They sit in four regions (left, centre, right, bottom). Each region shows
 its panels stacked or as tabs; the button at the right of a region's bar switches.
 
@@ -48,8 +48,8 @@ its panels stacked or as tabs; the button at the right of a region's bar switche
 
 ### Actions between windows
 
-Asking the Agent about something, opening a Wiki page and jumping to a photo, a playbook step or a
-capture all go to the window that has the target panel. A panel docked in the window you are using is
+Asking the Agent about something, opening a Wiki page, jumping to a photo, a playbook step or a
+capture, and opening the Notes panel from the Board card all go to the window that has the target panel. A panel docked in the window you are using is
 shown and used directly. A panel in another window is brought to the front and sent the action over a
 `BroadcastChannel` named `pcbv-panels`; if the panel is detached but its window is gone, it returns to
 its place first.
@@ -60,7 +60,8 @@ Retry only). Nothing is repeated automatically: a late acknowledgement runs noth
 only returns the panel without asking the question. Messages carry the board name and a counter the main
 window raises on every board change, so a message for another board, or from before the last switch
 (also A to B and back to A), is ignored. A message is at most 64 KiB, each window remembers the last 256
-message IDs to drop duplicates, and only the actions ask, wiki and jump are accepted.
+message IDs to drop duplicates, and only the actions ask, wiki, jump and notes are accepted. The notes action brings the Notes panel forward and
+puts the cursor in its text.
 
 Limits: the channel alone cannot tell whether a window is alive, so a window that hangs looks the same as
 one that is not there. A reloaded main window starts its counter from the clock, so panels opened before
@@ -68,7 +69,7 @@ the reload still accept its messages; one that does not can be fixed with Bring 
 `BroadcastChannel` shows a message instead of failing silently.
 - Workspaces are named layouts, saved by the service in `~/.config/pcbv/workspaces.json`, so the
   browser and the desktop app share them. Learn, Console, Analysis and Wall are built in; changes
-  to the current workspace are saved as you go, Reset layout puts a built-in one back, Save as keeps a copy.
+  to the current workspace are saved as you go, the Workspace actions menu (⋯) holds Reset layout, which puts a built-in one back, and Save as, which keeps a copy.
 
 The layout format is in `app/js/core/layout.js`.
 
@@ -132,10 +133,10 @@ end: the main window loads the app from the local service, so the browser stays 
 
 ### The Arch package
 
-`packaging/arch/` builds `pcbv-0.1.1-1-x86_64.pkg.tar.zst` with `makepkg` from a git ref of this checkout
+`packaging/arch/` builds `pcbv-0.1.2-1-x86_64.pkg.tar.zst` with `makepkg` from a git ref of this checkout
 (`PCBV_REF=branch=<name>`, or the tag `v$pkgver` by default), so the build never sees `node_modules`, notes or
 uncommitted files. It needs the network (uv, cargo and npm download). Install it with `makepkg -si` in
-`packaging/arch/`, or `sudo pacman -U pcbv-0.1.1-1-x86_64.pkg.tar.zst`; remove it with `sudo pacman -R pcbv`.
+`packaging/arch/`, or `sudo pacman -U pcbv-0.1.2-1-x86_64.pkg.tar.zst`; remove it with `sudo pacman -R pcbv`.
 
 | Path | What |
 |---|---|
@@ -160,7 +161,7 @@ Packages (once): `sudo pacman -S --needed rust webkit2gtk-4.1 base-devel curl wg
 While the saved `welcomed` setting is false and there are no boards, the empty-board panel shows a Welcome card
 instead of "No boards yet". It explains the app in Guided (Expert shows one short line), shows the data folder, and offers
 **Start the tutorial** (primary, with "About 20 minutes. No hardware needed."; it reads **Resume the tutorial (step N of
-18)** while one is in progress and is gone once it is finished), **Create my first board** (focus goes to the name box), **Read Start here** and **What you need** (each brings up the panel area and opens that wiki page,
+18)** while one is in progress and is gone once it is finished), **Create my first board** (the board list gives way to the name form, with the focus in the name field), **Read Start here** and **What you need** (each brings up the panel area and opens that wiki page,
 since the wiki lives there; the wiki's Back button then returns to the Welcome) and two optional buttons that open
 Settings with focus on the git or assistant switch. The bench check lists whether you are in the `uucp` group and
 whether `sigrok-cli`, the FX2 analyzer firmware and `gitleaks` are installed, each with a text mark and, when
@@ -243,7 +244,7 @@ writes the header down and exports a report (steps 15 to 18).
   survives a reload. A comparison matches at 0.8 or more: the practice capture was recorded without anyone touching
   the board, so its countdown ran out, and a console recording that stopped the countdown scores about 0.85 against it,
   while a recording made at the wrong speed scores near 0. The first difference shown is the moment the key was pressed.
-- **Export.** Exporting is allowed on step 18 only, and the step is done when the Board panel reports a finished export.
+- **Export.** Exporting is allowed on step 18 only, and the step is done when the Export dialog reports a finished export. Until the dialog is open, the highlight is on the Export button.
 - **Cleaning up.** Leaving or finishing closes the Console session on the practice board (an open session would make
   Start again refuse) and stops the virtual board only if the tutorial started it; one started from a terminal stays.
   It waits at most three seconds for the service; the calls go on in the background.

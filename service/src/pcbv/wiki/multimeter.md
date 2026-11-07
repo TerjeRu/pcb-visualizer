@@ -13,14 +13,14 @@ To find a UART you need three modes: continuity, resistance and DC voltage.
 
 - The meter shows the resistance between the probes. `OL` means open: the resistance is too high to measure, so the pins are not connected.
 - Use this mode only on an unpowered board.
-- Record the value with `pcbv measure <board> J4 4 0.3ohm`, or record `OL`. If `pcbv` is not on your PATH, run `uv run pcbv measure ...` in the service folder.
+- Record the value in the pin's **Reading** field, for example `0.3ohm` or `OL`. You can also run `pcbv measure <board> J4 4 0.3ohm`. If `pcbv` is not on your PATH, run `uv run pcbv measure ...` in the service folder.
 
 ## DC voltage (V with a straight line)
 
 - Power the board. Put the black probe on ground and the red probe on the pin.
 - Use the 20 V range, or auto range.
 - A meter averages fast signals. A pin that switches quickly between 0 and 3.3 V shows as a lower, jumping value. That is how you spot [TX](uart).
-- Record the value with `pcbv measure <board> J4 2 3.29V`.
+- Record the value in the pin's **Reading** field, for example `3.29V`. You can also run `pcbv measure <board> J4 2 3.29V`.
 
 ## Leads
 

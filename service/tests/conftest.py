@@ -16,6 +16,12 @@ def private_config_folder(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
 
 
+@pytest.fixture(autouse=True)
+def no_file_manager(monkeypatch):
+    """No test may start a file manager. A test of the starter itself removes this."""
+    monkeypatch.setenv("PCBV_NO_REVEAL", "1")
+
+
 @pytest.fixture
 def board(tmp_path):
     b = Board.create(tmp_path / "test-board", "Test board")

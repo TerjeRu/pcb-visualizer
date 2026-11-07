@@ -114,6 +114,9 @@ export function createConsoleView(doc, handlers) {
 
   function status(text) { $('serial-status').textContent = text; }
 
+  /** With no session and nothing on the screen, the black area is a short band; it grows when a session starts. */
+  function drawFold() { out.classList.toggle('folded', !state && !out.firstChild); }
+
   function drawControls() {
     const open = Boolean(state);
     const hasPort = Boolean($('serial-port').value);
@@ -130,6 +133,7 @@ export function createConsoleView(doc, handlers) {
     $('serial-connect').disabled = !editable || (!open && !hasPort);
     for (const id of ['serial-input', 'serial-send', 'key-enter', 'key-space', 'key-ctrl-c']) $(id).disabled = !open || !editable || Boolean(state?.recordingError);
     $('serial-ask').disabled = !(state?.captureId || latestCapture);
+    drawFold();
     status(state?.recordingError ?? (open ? `Connected to ${state.label} at ${state.baud} baud. Captured to ${state.path}` : lastReason || 'Not connected.'));
   }
 
@@ -153,6 +157,7 @@ export function createConsoleView(doc, handlers) {
     const last = lines.at(-1) ?? '';
     const prev = lines.at(-2) ?? '';
     $('key-space').classList.toggle('urgent', classifyLine(last) === 'autoboot' || classifyLine(prev) === 'autoboot' && last.trim() === '');
+    drawFold();
     if (follow) out.scrollTop = out.scrollHeight;
   }
 
@@ -213,7 +218,7 @@ export function createConsoleView(doc, handlers) {
   for (const [id, key] of [['key-enter', 'enter'], ['key-space', 'space'], ['key-ctrl-c', 'ctrl-c']]) {
     $(id).addEventListener('click', () => handlers.writeSerial({ key, sessionId: state?.captureId }, state?.board));
   }
-  $('serial-clear').addEventListener('click', () => { screen.clear(); out.replaceChildren(); });
+  $('serial-clear').addEventListener('click', () => { screen.clear(); out.replaceChildren(); drawFold(); });
 
   $('confirm-form').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -244,7 +249,7 @@ export function createConsoleView(doc, handlers) {
         note({ kind: 'session', state });
         lastReason = !state && msg.reason && msg.reason !== 'closed' ? `Disconnected: ${msg.reason}` : '';
         // The backlog is the whole recent output, so a reconnect to the same session starts the screen over too.
-        if (state && (changed || msg.backlog)) { screen.clear(); out.replaceChildren(); }
+        if (state && (changed || msg.backlog)) { screen.clear(); out.replaceChildren(); drawFold(); }
         if (msg.backlog) { note({ kind: 'backlog', text: msg.backlog }); drawOutput(screen.write(msg.backlog)); }
         if (!state && msg.reason && msg.reason !== 'closed') status(`Disconnected: ${msg.reason}`);
         else drawControls();

@@ -396,9 +396,12 @@ def report_markdown(board_dir: Path, project: dict, photos: list[tuple[dict, str
     return "\n".join(lines).rstrip("\n") + "\n"
 
 
+def export_root() -> Path:
+    return Path(os.environ.get("PCBV_EXPORT_DIR") or Path.home() / "pcbv-exports")
+
+
 def default_folder(slug: str) -> Path:
-    base = Path(os.environ.get("PCBV_EXPORT_DIR") or Path.home() / "pcbv-exports")
-    return base / f'{slug}-{datetime.now().strftime("%Y%m%d-%H%M%S")}'
+    return export_root() / f'{slug}-{datetime.now().strftime("%Y%m%d-%H%M%S")}'
 
 
 def check_target(board_dir: Path, out: Path) -> Path:
@@ -454,7 +457,8 @@ def _export_board(board_dir: Path, out: Path, formats=FORMATS, *, redact: bool =
         path = resolve_file(files, asset.get("path", ""))
         if asset.get("kind") != "image" or path is None:
             continue
-        stem = re.sub(r"[^a-z0-9-]+", "-", f'photo-{number}-{asset.get("side") or "photo"}'.lower())
+        name = re.sub(r"[^a-z0-9]+", "-", str(asset.get("label") or "").lower()).strip("-")[:40] or "photo"
+        stem = f"photo-{number}-{name}"
         shapes = overlay(project, asset, redactor)
         if "photo" in formats or "report" in formats:
             write(f"{stem}.png", annotated_png(path, shapes))

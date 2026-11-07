@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { dragRect, indexToCell, movedRect, newMarkerEvent, pinLayout, roleForKey } from '../js/core/schema.js';
+import { dragRect, growsLeft, indexToCell, movedRect, newMarkerEvent, nudgedCallout, pinLayout, RESIZE_HANDLES, resizedRect, roleForKey } from '../js/core/schema.js';
 
 test('pin numbering schemes map to the right cells', () => {
   const idc = { rows: 2, cols: 5, numbering: 'column' };
@@ -30,6 +30,38 @@ test('moving a box keeps it on the image', () => {
   const m = { x: 10, y: 10, w: 20, h: 20 };
   assert.deepEqual(movedRect(m, 5.4, -3.6, 100, 100), { x: 15, y: 6 });
   assert.deepEqual(movedRect(m, -50, 500, 100, 100), { x: 0, y: 80 });
+});
+
+test('each handle moves only its own edges', () => {
+  const box = { x: 100, y: 100, w: 200, h: 100 };
+  const grow = (handle) => resizedRect(box, handle, 10, 20, 1000, 500);
+  assert.deepEqual(grow('nw'), { x: 110, y: 120, w: 190, h: 80 });
+  assert.deepEqual(grow('n'), { x: 100, y: 120, w: 200, h: 80 });
+  assert.deepEqual(grow('ne'), { x: 100, y: 120, w: 210, h: 80 });
+  assert.deepEqual(grow('e'), { x: 100, y: 100, w: 210, h: 100 });
+  assert.deepEqual(grow('se'), { x: 100, y: 100, w: 210, h: 120 });
+  assert.deepEqual(grow('s'), { x: 100, y: 100, w: 200, h: 120 });
+  assert.deepEqual(grow('sw'), { x: 110, y: 100, w: 190, h: 120 });
+  assert.deepEqual(grow('w'), { x: 110, y: 100, w: 190, h: 100 });
+  assert.equal(RESIZE_HANDLES.length, 8);
+  assert.deepEqual(RESIZE_HANDLES.map(grow).filter((r) => r.x < 0 || r.y < 0), []);
+});
+
+test('a resized box stays inside the image', () => {
+  const box = { x: 100, y: 100, w: 200, h: 100 };
+  assert.deepEqual(resizedRect(box, 'nw', -500, -500, 1000, 500), { x: 0, y: 0, w: 300, h: 200 });
+  assert.deepEqual(resizedRect(box, 'se', 5000, 5000, 1000, 500), { x: 100, y: 100, w: 900, h: 400 });
+  assert.deepEqual(resizedRect(box, 'e', 5000, 0, 1000, 500), { x: 100, y: 100, w: 900, h: 100 });
+});
+
+test('a handle dragged past the opposite edge stops at the minimum size and never flips', () => {
+  const box = { x: 100, y: 100, w: 200, h: 100 };
+  assert.deepEqual(resizedRect(box, 'e', -900, 0, 1000, 500), { x: 100, y: 100, w: 6, h: 100 });
+  assert.deepEqual(resizedRect(box, 'w', 900, 0, 1000, 500), { x: 294, y: 100, w: 6, h: 100 });
+  assert.deepEqual(resizedRect(box, 'n', 0, 900, 1000, 500), { x: 100, y: 194, w: 200, h: 6 });
+  assert.deepEqual(resizedRect(box, 's', 0, -900, 1000, 500), { x: 100, y: 100, w: 200, h: 6 });
+  assert.deepEqual(resizedRect(box, 'se', -900, -900, 1000, 500, 10), { x: 100, y: 100, w: 10, h: 10 });
+  assert.deepEqual(resizedRect(box, 'nw', 900, 900, 1000, 500), { x: 294, y: 194, w: 6, h: 6 });
 });
 
 test('a new marker carries a header shaped like the box', () => {
@@ -81,4 +113,20 @@ test('safeColor passes #rrggbb only', async () => {
   assert.equal(safeColor('#a1B2c3'), '#a1B2c3');
   for (const bad of ['red', '#fff', '#12345g', '#1234567', 'url(x)', '', null, 7]) assert.equal(safeColor(bad, 'fallback'), 'fallback');
   assert.equal(safeColor('nope'), null);
+});
+
+test('a callout moves as one piece and keeps dot and label inside the image', () => {
+  const c = { x: 300, y: 300, lx: 360, ly: 250 };
+  assert.deepEqual(nudgedCallout(c, 10, -5, 1000, 500), { x: 310, y: 295, lx: 370, ly: 245 });
+  assert.deepEqual(nudgedCallout(c, 9999, 9999, 1000, 500), { x: 940, y: 500, lx: 1000, ly: 450 });
+  assert.deepEqual(nudgedCallout(c, -9999, -9999, 1000, 500), { x: 0, y: 50, lx: 60, ly: 0 });
+});
+
+test('a callout label grows away from the photo edge it would leave', () => {
+  assert.equal(growsLeft(300, 400, 100, 1000), true, 'left of its dot: grows left');
+  assert.equal(growsLeft(500, 400, 100, 1000), false, 'right of its dot: grows right');
+  assert.equal(growsLeft(950, 900, 200, 1000), true, 'would leave the right edge: grows left');
+  assert.equal(growsLeft(50, 100, 200, 1000), false, 'would leave the left edge: grows right');
+  assert.equal(growsLeft(950, 900, 2000, 1000), false, 'fits on neither side: keeps its side');
+  assert.equal(growsLeft(800, 900, 200, 1000), true, 'exactly at the edge still fits');
 });

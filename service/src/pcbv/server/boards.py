@@ -11,6 +11,7 @@ from ..boards import list_boards
 from ..datarepo import board_history
 from ..events import EventConflict, EventError
 from ..journal import StorageError
+from ..reveal import reveal
 from ..sender import ClientSender, encode
 from .body import body_json
 from .serial import serial_state
@@ -48,7 +49,8 @@ async def create_board(request: Request, state: State):
 async def board_state(slug: str, state: State):
     entry = state.registry.get(slug)
     return {"slug": slug, "seq": entry.board.seq, "project": entry.board.project,
-            "warnings": entry.board.warnings, "storage": entry.board.storage}
+            "warnings": entry.board.warnings, "storage": entry.board.storage,
+            "directory": str(entry.board.directory)}
 
 
 @router.get("/api/boards/{slug}/events")
@@ -74,6 +76,13 @@ async def board_commits(slug: str, state: State):
     if (await asyncio.to_thread(appsettings.load, state.registry.root))["git"] != "on":
         return {"commits": []}
     return {"commits": await asyncio.to_thread(board_history, entry.board.directory)}
+
+
+@router.post("/api/boards/{slug}/reveal")
+async def reveal_board(slug: str, state: State):
+    """Open the board's folder in the file manager. Takes no input: the path is the service's own."""
+    entry = state.registry.get(slug)
+    return {"opened": await asyncio.to_thread(reveal, entry.board.directory)}
 
 
 @router.websocket("/api/boards/{slug}/ws")

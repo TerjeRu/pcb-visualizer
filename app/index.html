@@ -15,18 +15,18 @@
 <body>
   <header class="bar">
     <h1>PCB Visualizer</h1>
-    <label class="field-inline" id="board-field">Board
+    <label class="field-inline" id="board-field" hidden>Board
       <select id="board-select" disabled></select>
     </label>
     <form id="new-board-form" class="field-inline" autocomplete="off">
       <input id="new-board-name" type="text" maxlength="120" placeholder="New board name" aria-label="New board name">
       <button type="submit" id="new-board-button" disabled>Create</button>
+      <button type="button" id="new-board-cancel" hidden>Cancel</button>
     </form>
     <span class="menu-anchor"><button type="button" id="panels-open" aria-haspopup="menu" aria-expanded="false" aria-keyshortcuts="Control+Shift+P" title="Find, show, move or put away panels (Ctrl+Shift+P)" disabled>Panels</button></span>
     <div class="field-inline workspace" id="workspace-bar">
       <label class="field-inline">Workspace <select id="workspace-select"></select></label>
-      <button type="button" id="workspace-save" title="Save the current layout under a new name">Save as…</button>
-      <button type="button" id="workspace-reset" title="Put the panels back as this workspace started">Reset layout</button>
+      <span class="menu-anchor" id="workspace-menu-anchor"><button type="button" id="workspace-menu" aria-haspopup="menu" aria-expanded="false" aria-label="Workspace actions" title="Save the layout under a new name, or reset it">⋯</button></span>
       <form id="workspace-name-form" class="field-inline" autocomplete="off" hidden>
         <input id="workspace-name" type="text" maxlength="40" placeholder="Name for this layout" aria-label="Name for this layout">
         <button type="submit" class="primary">Save</button>
@@ -39,7 +39,7 @@
     </div>
     <button type="button" id="settings-open" aria-haspopup="dialog">Settings</button>
     <button type="button" id="tutorial-leave" hidden>Leave tutorial</button>
-    <span id="status" class="status" data-state="idle" role="status">Not connected</span>
+    <span class="status-anchor" id="status-anchor"><button type="button" id="status-button" class="status-button" aria-haspopup="menu" aria-expanded="false" disabled><span id="status" class="status" data-state="idle" role="status">Not connected</span></button></span>
     <p id="storage-warning" role="status" hidden></p>
   </header>
 
@@ -113,29 +113,15 @@
             <form id="details-form" autocomplete="off">
               <label>Name <input id="field-name" type="text" maxlength="200"></label>
               <label>Device <input id="field-device" type="text" maxlength="200"></label>
-              <label>Notes <textarea id="field-notes" rows="3"></textarea></label>
+              <div class="field">
+                <span id="open-notes-label">Notes</span>
+                <button type="button" id="open-notes" class="notes-open" aria-labelledby="open-notes-label open-notes">No notes yet</button>
+              </div>
             </form>
-            <ul id="counts" class="counts" aria-label="Contents"></ul>
-            <details id="export" class="export">
-              <summary>Export</summary>
-              <form id="export-form" autocomplete="off">
-                <fieldset>
-                  <legend>Formats</legend>
-                  <label class="check"><input type="checkbox" name="format" value="photo" checked> Annotated photos (PNG)</label>
-                  <label class="check"><input type="checkbox" name="format" value="svg"> Annotated photos (SVG)</label>
-                  <label class="check"><input type="checkbox" name="format" value="report" checked> Report (Markdown)</label>
-                  <label class="check"><input type="checkbox" name="format" value="csv" checked> Pinouts (CSV)</label>
-                  <label class="check"><input type="checkbox" name="format" value="json"> Pinouts (JSON)</label>
-                  <label class="check"><input type="checkbox" name="format" value="zip"> The board folder (zip)</label>
-                </fieldset>
-                <label class="check"><input id="export-redact" type="checkbox" checked> Redact credentials, serial numbers and addresses</label>
-                <p id="export-warning" class="hint warning" hidden>Not redacted: the files can contain serial numbers, MAC addresses and passwords. Keep them private.</p>
-                <p class="hint guide">Files go to a new folder under <code>~/pcbv-exports</code>. Text printed in the photos, such as a label with a serial number, is not redacted; look at them before sharing.</p>
-                <button type="submit" id="export-run">Export</button>
-              </form>
-              <p id="export-result" class="hint" role="status"></p>
-            </details>
-            <p class="hint guide">Changes are saved when you leave a field.</p>
+            <div class="step-actions">
+              <button type="button" id="reveal-board">Open board folder</button>
+              <button type="button" id="export-open" aria-haspopup="dialog">Export…</button>
+            </div>
             <p class="hint guide explainer">New to this? <a href="#wiki/start-here" data-wiki="start-here" class="wiki-link">Start here</a> lists what to read before opening a board, and <a href="#wiki/method-and-ethics" data-wiki="method-and-ethics" class="wiki-link">Method and ethics</a> explains how to work.</p>
           </section>
         </section>
@@ -175,38 +161,41 @@
               </div>
               <label>Pin numbering <select id="header-numbering"></select></label>
               <div id="pin-grid" class="pin-grid" role="group" aria-label="Pins"></div>
-              <p id="pin-keys" class="hint guide"></p>
+              <details id="pin-keys" class="keys guide">
+                <summary>Pin keys</summary>
+                <p class="hint">Click a pin, then press a key. Backspace clears the pin.</p>
+                <ul class="key-list"></ul>
+              </details>
               <fieldset id="pin-form" class="pin-form" hidden>
                 <legend id="pin-heading"></legend>
                 <div class="row2">
                   <label>Role <select id="pin-role"></select></label>
                   <label>Label <input id="pin-label" type="text" maxlength="40"></label>
                 </div>
-                <label>Note <input id="pin-note" type="text" maxlength="400" placeholder="3.29 V idle, flickers at boot"></label>
+                <label>Note <textarea id="pin-note" class="grow" rows="2" data-max-rows="8" maxlength="400" placeholder="3.29 V idle, flickers at boot"></textarea></label>
                 <div id="pin-guess" class="guess-note" hidden>
                   <p id="pin-guess-text"></p>
                   <p class="hint guide">A guess from the photo, not a measurement. Confirm ground by continuity and the level with a voltage reading before you wire anything.</p>
                   <button type="button" id="pin-guess-use"></button>
                 </div>
                 <ol id="pin-readings" class="readings" aria-label="Readings, newest first" hidden></ol>
+                <div class="reading-add">
+                  <label>Reading <input id="pin-reading" type="text" maxlength="40" placeholder="3.29V, 0.3ohm, OL or beep" autocomplete="off" aria-describedby="pin-reading-hint"></label>
+                  <div class="reading-actions">
+                    <label class="check"><input id="pin-reading-powered" type="checkbox"> Board powered</label>
+                    <button type="button" id="pin-reading-add">Add</button>
+                  </div>
+                  <p id="pin-reading-hint" class="reading-hint" role="status" hidden></p>
+                </div>
                 <p id="pin-wiki" class="hint guide" hidden></p>
                 <div class="step-actions">
                   <button type="button" id="pin-ask" data-ai><span class="guide">Ask the assistant about this pin</span><span class="terse">Ask</span></button>
                   <button type="button" id="pin-clear">Clear pin</button>
                 </div>
               </fieldset>
-              <label>Header notes <textarea id="header-notes" rows="2"></textarea></label>
+              <label>Header notes <textarea id="header-notes" class="grow" rows="3" data-max-rows="12"></textarea></label>
               <button type="button" id="marker-delete" class="danger">Remove marker</button>
             </form>
-          </section>
-        </section>
-
-        <section class="panel panel-screen" id="panel-feed" data-panel="feed">
-          <section class="screen" aria-labelledby="feed-heading">
-            <h2 id="feed-heading">Changes</h2>
-            <p class="hint guide explainer">Every edit to this board as it happens, newest first, with who made it. Recording changes is part of <a href="#wiki/method-and-ethics" data-wiki="method-and-ethics" class="wiki-link">Method and ethics</a>.</p>
-            <ol id="feed" class="feed" role="log" aria-live="polite"></ol>
-            <p id="changes-empty" class="hint"><span class="guide">No changes yet. Add a photo or mark a header and it appears here.</span><span class="terse">No changes.</span></p>
           </section>
         </section>
 
@@ -217,10 +206,6 @@
               <label id="add-photo" class="button">Add photo
                 <input id="photo-file" class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp">
               </label>
-              <select id="photo-side" aria-label="Which side the new photo shows">
-                <option value="front">front</option><option value="back">back</option>
-                <option value="detail">detail</option><option value="other">other</option>
-              </select>
               <span class="sep"></span>
               <button type="button" id="tool-select" aria-pressed="true">Select</button>
               <button type="button" id="tool-box" aria-pressed="false">Draw box</button>
@@ -235,13 +220,48 @@
             </div>
             <p class="hint guide explainer"><a href="#wiki/board-parts" data-wiki="board-parts" class="wiki-link">Parts on a router board</a> and <a href="#wiki/chip-packages" data-wiki="chip-packages" class="wiki-link">Chip packages and markings</a> help you name what you see; <a href="#wiki/photographing-boards" data-wiki="photographing-boards" class="wiki-link">Photographing boards</a> covers taking the photo.</p>
             <div id="stage" class="stage" tabindex="-1">
-              <p id="viewer-empty" class="hint empty"><span class="guide">No photos yet. Take a sharp, straight-on photo of the board in good light and add it with <strong>Add photo</strong>. The original stays on this machine; a smaller copy without location data is kept with the board.</span><span class="terse">No photos.</span></p>
+              <p id="viewer-empty" class="hint empty"><span class="guide">No photos yet. Take a sharp, straight-on photo of the board in good light. Add it with <strong>Add photo</strong>, or drop or paste it here. The original stays on this machine; a smaller copy without location data is kept with the board.</span><span class="terse">No photos.</span></p>
               <div id="canvas" class="canvas" hidden>
                 <img id="photo" alt="" draggable="false">
                 <svg id="overlay" class="overlay" data-tool="select" xmlns="http://www.w3.org/2000/svg"></svg>
               </div>
             </div>
+            <p id="drop-hint" class="drop-hint" hidden>Drop the photo to add it</p>
           </section>
+        </section>
+
+        <section class="panel" id="panel-notes" data-panel="notes">
+          <div class="card panel-card notes-card">
+            <div id="tab-notes" class="notes-tab">
+              <p class="hint guide explainer">Free notes about this board, written in Markdown. They save while you type.</p>
+              <div class="notes-bar" role="toolbar" aria-label="Notes tools">
+                <div class="notes-group" role="group" aria-label="View">
+                  <button type="button" id="notes-mode-edit" data-mode="edit" aria-pressed="false">Edit</button>
+                  <button type="button" id="notes-mode-split" data-mode="split" aria-pressed="false">Split</button>
+                  <button type="button" id="notes-mode-preview" data-mode="preview" aria-pressed="false">Preview</button>
+                </div>
+                <span class="notes-sep" aria-hidden="true"></span>
+                <div class="notes-group" role="group" aria-label="Format">
+                  <button type="button" id="notes-heading" data-format="heading">Heading</button>
+                  <button type="button" id="notes-bold" data-format="bold" aria-keyshortcuts="Control+B"><strong>Bold</strong></button>
+                  <button type="button" id="notes-list" data-format="list">List</button>
+                  <button type="button" id="notes-checklist" data-format="checklist">Checklist</button>
+                  <button type="button" id="notes-code" data-format="code">Code</button>
+                  <button type="button" id="notes-link" data-format="link" aria-keyshortcuts="Control+K">Link</button>
+                </div>
+                <span class="notes-sep" aria-hidden="true"></span>
+                <button type="button" id="notes-dated">Add dated entry</button>
+                <span class="notes-state">
+                  <span id="notes-counter" class="notes-counter" hidden></span>
+                  <span id="notes-save" role="status">Saved</span>
+                </span>
+              </div>
+              <div id="notes-body" class="notes-body">
+                <textarea id="notes-text" class="notes-text" maxlength="100000" spellcheck="false" aria-label="Notes text"></textarea>
+                <article id="notes-preview" class="md wiki-page notes-preview" aria-label="Notes preview"></article>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="panel" id="panel-playbook" data-panel="playbook">
@@ -296,7 +316,7 @@
                 <span class="hint guide">A practice board on this computer. It boots like a real router when you connect at 115200 baud.</span>
               </div>
               <p class="hint guide explainer">The console talks to the board over three wires: GND, TX and RX. See <a href="#wiki/uart" data-wiki="uart" class="wiki-link">UART</a>, <a href="#wiki/usb-uart-adapter" data-wiki="usb-uart-adapter" class="wiki-link">USB-UART adapter</a> and <a href="#wiki/wiring" data-wiki="wiring" class="wiki-link">Wiring</a>.</p>
-              <div id="serial-output" class="serial-output" role="log" aria-live="off" aria-label="Console output" tabindex="0"></div>
+              <div id="serial-output" class="serial-output folded" role="log" aria-live="off" aria-label="Console output" tabindex="0"></div>
               <form id="serial-form" class="serial-form" autocomplete="off">
                 <input id="serial-input" type="text" spellcheck="false" autocapitalize="off" placeholder="Type a command and press Enter" aria-label="Command">
                 <button type="submit" id="serial-send">Send</button>
@@ -411,7 +431,7 @@
 
         <section class="panel" id="panel-terminal" data-panel="terminal">
           <div class="card panel-card">
-            <div id="tab-terminal" class="terminal-tab">
+            <div id="tab-terminal" class="terminal-tab folded">
               <div class="serial-bar">
                 <button type="button" id="terminal-start" class="primary">Start session</button>
                 <button type="button" id="terminal-stop">End session</button>
@@ -530,14 +550,8 @@
 
     <section class="settings-section" aria-labelledby="settings-general">
       <h3 id="settings-general">General</h3>
-      <p class="hint guide explainer">Guided shows explanations and hints; Expert hides them. Safety questions before a destructive action stay in both. See <a href="#wiki/settings-and-privacy" data-wiki="settings-and-privacy" class="wiki-link">Settings and privacy</a>.</p>
+      <p class="hint guide explainer">The switch in the top bar sets Guided or Expert. Guided shows explanations and hints; Expert hides them. Safety questions before a destructive action stay in both. See <a href="#wiki/settings-and-privacy" data-wiki="settings-and-privacy" class="wiki-link">Settings and privacy</a>.</p>
       <div class="row2">
-        <label>Guidance
-          <select id="settings-guidance">
-            <option value="guided">Guided</option>
-            <option value="expert">Expert</option>
-          </select>
-        </label>
         <label>Theme
           <select id="theme-select">
             <option value="system">System</option>
@@ -665,6 +679,29 @@
       </ol>
       <dl id="git-status" class="git-status"></dl>
     </section>
+  </dialog>
+
+  <dialog id="export-dialog" class="settings export" aria-labelledby="export-title" data-opener="export-open">
+    <div class="settings-head">
+      <h2 id="export-title">Export</h2>
+      <button type="button" id="export-close">Close</button>
+    </div>
+    <form id="export-form" autocomplete="off">
+      <fieldset>
+        <legend>Formats</legend>
+        <label class="check"><input type="checkbox" name="format" value="photo" checked> Annotated photos (PNG)</label>
+        <label class="check"><input type="checkbox" name="format" value="svg"> Annotated photos (SVG)</label>
+        <label class="check"><input type="checkbox" name="format" value="report" checked> Report (Markdown)</label>
+        <label class="check"><input type="checkbox" name="format" value="csv" checked> Pinouts (CSV)</label>
+        <label class="check"><input type="checkbox" name="format" value="json"> Pinouts (JSON)</label>
+        <label class="check"><input type="checkbox" name="format" value="zip"> The board folder (zip)</label>
+      </fieldset>
+      <label class="check"><input id="export-redact" type="checkbox" checked> Redact credentials, serial numbers and addresses</label>
+      <p id="export-warning" class="hint warning" hidden>Not redacted: the files can contain serial numbers, MAC addresses and passwords. Keep them private.</p>
+      <p class="hint guide">Files go to a new folder under <code>~/pcbv-exports</code>. Text printed in the photos, such as a label with a serial number, is not redacted; look at them before sharing.</p>
+      <button type="submit" id="export-run">Export</button>
+    </form>
+    <p id="export-result" class="hint" role="status"></p>
   </dialog>
 </body>
 </html>
